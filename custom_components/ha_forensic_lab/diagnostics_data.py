@@ -55,6 +55,7 @@ def build_runtime_diagnostics(
     capture: CaptureDiagnosticsSource | None,
     store: StoreDiagnosticsSource | None,
     incident_store: IncidentStoreDiagnosticsSource | None,
+    integration_version: str | None = None,
 ) -> dict[str, Any]:
     """Build diagnostics without exposing forensic evidence or identifiers."""
     default_kinds = [kind.value for kind in ForensicEventKind]
@@ -78,6 +79,9 @@ def build_runtime_diagnostics(
 
     return {
         "schema_version": 1,
+        "integration": {
+            "version": integration_version,
+        },
         "config": {
             "capture_buffer_size": int(
                 options.get(

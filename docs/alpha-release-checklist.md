@@ -13,12 +13,17 @@ A checked box means the behavior has been verified, not merely implemented.
 - [ ] repository description/homepage/topics are final
 - [ ] MIT license is present and detected
 - [ ] production brand icon renders correctly in HACS
-- [ ] README accurately labels the release as alpha/pre-alpha
+- [ ] README accurately labels the release as an unreleased alpha candidate
 - [ ] manifest version matches the intended release tag
+- [ ] CHANGELOG has a matching version section
+- [ ] deterministic manual-install ZIP builds successfully
+- [ ] ZIP checksum is generated and verified
+- [ ] release workflow has been reviewed before the first tag is pushed
 
 ## Home Assistant lifecycle
 
-- [ ] fresh install through HACS works
+- [ ] fresh install through HACS custom repository works
+- [ ] manual ZIP install works from a clean custom_components directory
 - [ ] config flow creates exactly one entry
 - [ ] Configure opens capture/retention options
 - [ ] option changes reload successfully
@@ -63,11 +68,17 @@ A checked box means the behavior has been verified, not merely implemented.
 - [ ] testers are told not to upload raw HA traces
 - [ ] release notes explain rolling persistence crash window
 - [ ] release notes explain confirmed vs same-context evidence semantics
+- [ ] installation docs clearly mark the build as experimental
+- [ ] release remains a GitHub pre-release
 
 ## Release decision
 
 Do not call the build alpha-ready until the real-instance checks above have been
 performed.
 
-Current CI proves repository correctness only; it is not evidence that the
-integration has completed a real Home Assistant lifecycle test.
+Current CI proves repository correctness and packaging reproducibility only; it
+is not evidence that the integration has completed a real Home Assistant
+lifecycle test.
+
+Only after this checklist passes should the exact manifest version tag described
+in [releasing.md](releasing.md) be pushed.

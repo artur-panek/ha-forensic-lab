@@ -169,11 +169,14 @@ try {
   });
   assertObject(diagnostics, "diagnostics");
 
+  const integration = diagnostics.integration || {};
   const rolling = diagnostics.rolling_buffer || {};
   const capture = diagnostics.capture || {};
   const persistence = diagnostics.persistence || {};
   console.log(
     "PASS diagnostics" +
+      " · version " +
+      String(integration.version ?? "?") +
       " · buffer " +
       String(rolling.utilization_percent ?? "?") +
       "%" +

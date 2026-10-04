@@ -11,7 +11,7 @@ HA Forensic Lab is an experimental Home Assistant custom integration for reconst
 The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
 
 > [!IMPORTANT]
-> HA Forensic Lab is pre-alpha. The current development stack captures and persists a bounded normalized runtime stream, provides an admin-only timeline, supports deterministic context reconstruction with live Home Assistant trace enrichment, freezes durable saved incidents, and exports safe-profile sanitized incident bundles directly from the sidebar.
+> **0.1.0-alpha.1 is an unreleased alpha candidate.** Repository CI, packaging and smoke tooling do not by themselves prove real-instance compatibility. The first public pre-release must not be tagged until the real Home Assistant alpha checklist has passed.
 
 ## The problem
 
@@ -32,42 +32,23 @@ Every relationship shown by HA Forensic Lab must carry an evidence class:
 
 The UI must make those classes visually distinct.
 
-## v0.1 target
+## v0.1 alpha candidate
 
-The first useful release is intentionally small:
+Implemented in the current development stack:
 
-- bounded runtime event recording
-- configurable capture scope and retention
-- searchable incident timeline
-- context-chain reconstruction
-- **Explain this change**
-- saved incidents
-- sanitized incident export
-- native Home Assistant sidebar panel
-
-See the docs directory for architecture, event model, persistence, capture settings, runtime diagnostics, causality, incident, export and WebSocket details.
-
-## Current status
-
-Implemented in the development stack:
-
-- capture state changes, service calls, automation triggers and script starts
+- bounded normalized runtime capture
 - configurable event-type/entity/domain capture filters
-- configurable bounded rolling capacity (256–8192 events)
-- configurable rolling persistence cadence (5–60 seconds)
-- privacy-safe runtime diagnostics and recorder performance counters
-- compact Recorder health view in the sidebar
+- configurable rolling capacity and persistence cadence
 - private atomic rolling snapshot persistence
-- admin-only searchable timeline
+- searchable admin-only runtime timeline
 - deterministic context-based **Explain this change**
-- live automation/script trace enrichment with a privacy-reduced structural projection
-- optional freezing of that validated safe trace projection into saved incidents and sanitized exports
-- **Save incident** directly from a state-change event
-- durable saved incidents in a separate private store
-- saved-incident list and management in the sidebar
-- durable saved-incident Review that reconstructs causality without the live buffer
-- safe-profile sanitized ZIP export and download from the sidebar
-- explicit evidence gaps instead of timing guesses
+- privacy-reduced automation/script trace enrichment
+- durable saved incidents with Review independent from the live rolling buffer
+- safe-only sanitized ZIP incident export
+- privacy-safe aggregate diagnostics and Recorder health
+- production waveform/lens visual identity
+- read-only real-instance smoke client
+- deterministic alpha packaging and tag/version release contract
 
 Capture filters are applied before rolling retention and persistence, including to
 a restored rolling snapshot after an options change. See
@@ -75,30 +56,36 @@ a restored rolling snapshot after an options change. See
 
 Saved incidents are bounded to 50 records and 500 frozen events per record.
 
-Safe export preserves diagnostic structure but pseudonymizes identifiers, removes user IDs and absolute timestamps, redacts free text and only retains a small allowlist of generic state values. v0.1 has no raw-export mode.
+Safe export preserves diagnostic structure but pseudonymizes identifiers,
+removes user IDs and absolute timestamps, redacts free text and only retains a
+small allowlist of generic state values. v0.1 has no raw-export mode.
 
-Still intentionally missing from v0.1:
+Still intentionally outside the first alpha:
 
 - timing-only correlated evidence
 - anomaly detection
 - AI root-cause summaries
 
-## Persistence caveat
+## Installation
 
-Rolling persistence is not a write-ahead log. A hard process or host crash can lose the newest rolling events since the most recent completed snapshot, normally roughly the configured persistence interval. Clean unloads flush immediately.
+The project is not yet in the default HACS catalogue.
 
-Saved incidents are explicit user actions and are written immediately.
+Once the first alpha is intentionally published, testers can install it through
+a HACS custom repository or the attached deterministic manual-install ZIP.
 
-## Alpha testing
+See [Installation](docs/installation.md).
+
+## Alpha testing and release gate
 
 Repository CI is not treated as proof of real-instance compatibility.
 
-The closed-alpha test matrix, read-only WebSocket smoke client and release gate
-are documented in:
+The test matrix, read-only smoke client and release gate are documented in:
 
-- [`docs/alpha-testing.md`](docs/alpha-testing.md)
-- [`docs/alpha-release-checklist.md`](docs/alpha-release-checklist.md)
-- [`docs/known-limitations.md`](docs/known-limitations.md)
+- [Alpha testing](docs/alpha-testing.md)
+- [Alpha release checklist](docs/alpha-release-checklist.md)
+- [Known limitations](docs/known-limitations.md)
+- [Release process](docs/releasing.md)
+- [Changelog](CHANGELOG.md)
 
 Read-only smoke example:
 
@@ -110,6 +97,34 @@ node scripts/alpha-smoke.mjs
 
 The smoke client does not call services or modify Home Assistant state.
 
+## Persistence caveat
+
+Rolling persistence is not a write-ahead log. A hard process or host crash can
+lose the newest rolling events since the most recent completed snapshot,
+normally roughly the configured persistence interval. Clean unloads flush
+immediately.
+
+Saved incidents are explicit user actions and are written immediately.
+
+## Security and privacy
+
+The panel and custom WebSocket API are admin-only.
+
+Persistent rolling snapshots and saved incidents use Home Assistant private
+storage mode. Raw event payloads and complete service data are not retained.
+
+Full Home Assistant traces are queried live through the admin-only trace
+WebSocket API and immediately reduced to structural paths/outcomes in panel
+memory. Config, blueprint inputs, variables, error text and arbitrary result
+payloads are not stored.
+
+When a user freezes trace evidence with an incident, the backend validates the
+reduced projection again against a strict allowlist. Sanitized exports
+pseudonymize automation/script, run, context and entity identifiers.
+
+Sanitized incident export is safe-only in v0.1. The sanitizer is separately
+tested and export ZIPs include a SHA-256 digest.
+
 ## Development
 
 Validation includes:
@@ -119,25 +134,15 @@ Validation includes:
 - Ruff
 - Python bytecode compilation
 - frontend JavaScript syntax checks
+- trace projection tests
 - pytest
-
-## Security and privacy
-
-The panel and WebSocket API are admin-only.
-
-Persistent rolling snapshots and saved incidents use Home Assistant private storage mode. Raw event payloads and complete service data are not retained.
-
-The current UI HTML-escapes values returned from Home Assistant before rendering them.
-
-Full Home Assistant traces are queried live through the admin-only trace WebSocket API and immediately reduced to structural paths/outcomes in panel memory. Config, blueprint inputs, variables, error text and arbitrary result payloads are never stored.
-
-When the user saves the currently explained event, the backend can freeze only that reduced projection after validating it again against a strict allowlist. Sanitized exports pseudonymize its automation/script, run and context identifiers. See [`docs/trace-enrichment.md`](docs/trace-enrichment.md).
-
-Sanitized incident export is safe-only in v0.1. The sanitizer is a separate tested module and export ZIPs include a SHA-256 digest.
+- release packaging contract tests
 
 ## Branding
 
-The production mark combines a runtime waveform, trace nodes and a forensic lens. Source artwork and palette guidance live in [`assets/brand/`](assets/brand/).
+The production mark combines a runtime waveform, trace nodes and a forensic
+lens. Source artwork and palette guidance live in
+[`assets/brand/`](assets/brand/).
 
 ## License
 

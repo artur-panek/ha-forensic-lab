@@ -7,6 +7,7 @@ from typing import Any
 import probatio
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.loader import async_get_integration
 
 from .capture import ForensicCapture
 from .causality import EvidenceEdge, ForensicExplanation, explain_event
@@ -376,8 +377,8 @@ async def websocket_incidents_export(
 
 @websocket_api.require_admin
 @websocket_api.websocket_command({"type": "ha_forensic_lab/diagnostics"})
-@callback
-def websocket_diagnostics(
+@websocket_api.async_response
+async def websocket_diagnostics(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
@@ -390,6 +391,7 @@ def websocket_diagnostics(
 
     entries = hass.config_entries.async_entries(DOMAIN)
     options = entries[0].options if entries else {}
+    integration = await async_get_integration(hass, DOMAIN)
 
     connection.send_result(
         msg["id"],
@@ -400,6 +402,11 @@ def websocket_diagnostics(
             incident_store=(
                 incident_store
                 if isinstance(incident_store, IncidentStore)
+                else None
+            ),
+            integration_version=(
+                str(integration.version)
+                if integration.version is not None
                 else None
             ),
         ),

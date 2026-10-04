@@ -6,6 +6,7 @@ from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.loader import async_get_integration
 
 from .capture import ForensicCapture
 from .const import DATA_CAPTURE, DATA_INCIDENT_STORE, DATA_STORE, DOMAIN
@@ -24,6 +25,7 @@ async def async_get_config_entry_diagnostics(
     capture = domain_data.get(DATA_CAPTURE)
     store = domain_data.get(DATA_STORE)
     incident_store = domain_data.get(DATA_INCIDENT_STORE)
+    integration = await async_get_integration(hass, DOMAIN)
 
     return build_runtime_diagnostics(
         config_entry.options,
@@ -33,5 +35,8 @@ async def async_get_config_entry_diagnostics(
             incident_store
             if isinstance(incident_store, IncidentStore)
             else None
+        ),
+        integration_version=(
+            str(integration.version) if integration.version is not None else None
         ),
     )

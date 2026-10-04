@@ -100,9 +100,11 @@ def test_diagnostics_contains_aggregates_but_not_private_filter_values() -> None
         capture=capture,
         store=store,
         incident_store=incident_store,
+        integration_version="0.1.0-alpha.1",
     )
     serialized = json.dumps(result, sort_keys=True)
 
+    assert result["integration"]["version"] == "0.1.0-alpha.1"
     assert result["config"]["capture_buffer_size"] == 4096
     assert result["config"]["excluded_entity_count"] == 2
     assert result["config"]["excluded_domain_count"] == 1
@@ -127,8 +129,10 @@ def test_diagnostics_handles_unloaded_runtime() -> None:
         capture=None,
         store=None,
         incident_store=None,
+        integration_version=None,
     )
 
+    assert result["integration"]["version"] is None
     assert result["rolling_buffer"]["events"] == 0
     assert result["capture"] is None
     assert result["persistence"] is None

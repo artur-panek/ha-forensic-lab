@@ -1,0 +1,67 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Validate, package and publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+          cache: pip
+
+      - name: Install release checks
+        run: python -m pip install pytest ruff
+
+      - name: Ruff
+        run: ruff check custom_components tests scripts/build_release.py
+
+      - name: Compile Python
+        run: python -m compileall -q custom_components scripts/build_release.py
+
+      - name: Repository tests
+        run: pytest -q
+
+      - name: Check frontend JavaScript
+        run: |
+          node --check custom_components/ha_forensic_lab/frontend/ha-forensic-lab-panel.js
+          node --check custom_components/ha_forensic_lab/frontend/trace-projection.mjs
+          node --check scripts/alpha-smoke.mjs
+          node tests/js/test_trace_projection.mjs
+
+      - name: Validate Home Assistant integration
+        uses: home-assistant/actions/hassfest@master
+
+      - name: Validate HACS repository
+        uses: hacs/action@main
+        with:
+          category: integration
+          ignore: "description topics"
+
+      - name: Build deterministic release archive
+        run: |
+          python scripts/build_release.py \
+            --tag "${GITHUB_REF_NAME}" \
+            --output dist
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ha-forensic-lab.zip
+            dist/ha-forensic-lab.zip.sha256
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
