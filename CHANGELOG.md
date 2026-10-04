@@ -41,6 +41,9 @@ First alpha candidate.
 
 ### Fixed during candidate audit
 
+- use matching voluptuous schemas and validation exceptions on HA 2026.9.4
+- document HACS custom-repository installation before the first public release
+
 - reject arbitrary token-shaped text in trace structural fields
 - preserve numeric Home Assistant choose-branch indexes, including branch zero
 - pseudonymize user-defined service names in safe incident exports
