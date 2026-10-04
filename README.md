@@ -1,6 +1,10 @@
-# HA Forensic Lab
+<p align="center">
+  <img src="assets/brand/ha-forensic-lab-mark.svg" width="180" alt="HA Forensic Lab logo">
+</p>
 
-**Runtime forensics and incident analysis for Home Assistant.**
+<h1 align="center">HA Forensic Lab</h1>
+
+<p align="center"><strong>Runtime forensics and incident analysis for Home Assistant.</strong></p>
 
 HA Forensic Lab is an experimental Home Assistant custom integration for reconstructing **what happened, in what order, and why**.
 
@@ -94,6 +98,10 @@ Persistent rolling snapshots and saved incidents use Home Assistant private stor
 The current UI HTML-escapes values returned from Home Assistant before rendering them.
 
 Sanitized incident export is safe-only in v0.1. The sanitizer is a separate tested module and export ZIPs include a SHA-256 digest.
+
+## Branding
+
+The production mark combines a runtime waveform, trace nodes and a forensic lens. Source artwork and palette guidance live in [`assets/brand/`](assets/brand/).
 
 ## License
 
