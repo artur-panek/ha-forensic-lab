@@ -89,6 +89,27 @@ Rolling persistence is not a write-ahead log. A hard process or host crash can l
 
 Saved incidents are explicit user actions and are written immediately.
 
+## Alpha testing
+
+Repository CI is not treated as proof of real-instance compatibility.
+
+The closed-alpha test matrix, read-only WebSocket smoke client and release gate
+are documented in:
+
+- [`docs/alpha-testing.md`](docs/alpha-testing.md)
+- [`docs/alpha-release-checklist.md`](docs/alpha-release-checklist.md)
+- [`docs/known-limitations.md`](docs/known-limitations.md)
+
+Read-only smoke example:
+
+~~~bash
+HA_URL="https://home.example" \
+HA_TOKEN="<long-lived-access-token>" \
+node scripts/alpha-smoke.mjs
+~~~
+
+The smoke client does not call services or modify Home Assistant state.
+
 ## Development
 
 Validation includes:
