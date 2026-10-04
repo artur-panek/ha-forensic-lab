@@ -18,6 +18,11 @@ class HAForensicLabPanel extends HTMLElement {
     this._hasLoaded = false;
     this._error = null;
     this._requestId = 0;
+    this._selectedEventId = null;
+    this._explanation = null;
+    this._explainLoading = false;
+    this._explainError = null;
+    this._explainRequestId = 0;
   }
 
   connectedCallback() {
@@ -97,6 +102,62 @@ class HAForensicLabPanel extends HTMLElement {
     }
   }
 
+  async _loadExplanation(eventId) {
+    if (!this._hass || !eventId || this._explainLoading) {
+      return;
+    }
+
+    const requestId = ++this._explainRequestId;
+    this._selectedEventId = eventId;
+    this._explanation = null;
+    this._explainError = null;
+    this._explainLoading = true;
+    this._render();
+
+    try {
+      const data = await this._hass.callWS({
+        type: "ha_forensic_lab/explain",
+        event_id: eventId,
+        max_events: 50,
+      });
+
+      if (requestId !== this._explainRequestId) {
+        return;
+      }
+
+      this._explanation = data;
+    } catch (error) {
+      if (requestId !== this._explainRequestId) {
+        return;
+      }
+
+      this._explainError =
+        error && error.message
+          ? String(error.message)
+          : "Unable to reconstruct context evidence";
+    } finally {
+      if (requestId === this._explainRequestId) {
+        this._explainLoading = false;
+        this._render();
+
+        const explanationPanel =
+          this.shadowRoot && this.shadowRoot.getElementById("explanation-panel");
+        if (explanationPanel) {
+          explanationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }
+    }
+  }
+
+  _closeExplanation() {
+    this._explainRequestId += 1;
+    this._selectedEventId = null;
+    this._explanation = null;
+    this._explainError = null;
+    this._explainLoading = false;
+    this._render();
+  }
+
   _render() {
     if (!this.shadowRoot) {
       return;
@@ -105,6 +166,7 @@ class HAForensicLabPanel extends HTMLElement {
     const events = this._data.events || [];
     const status = this._statusView();
     const content = this._contentView(events);
+    const explanation = this._explanationView();
 
     this.shadowRoot.innerHTML =
       this._styles() +
@@ -119,6 +181,7 @@ class HAForensicLabPanel extends HTMLElement {
       '</header>' +
       this._statsView(events.length) +
       this._filtersView() +
+      explanation +
       content +
       '<footer>Evidence-first by design. This view shows normalized runtime metadata only; raw event payloads are not exposed.</footer>' +
       '</main>';
@@ -278,13 +341,28 @@ class HAForensicLabPanel extends HTMLElement {
     const timestamp = this._formatTime(event.timestamp);
     const dateTime = this._formatDateTime(event.timestamp);
     const metadata = this._metadataView(event, dateTime);
+    const selected = event.event_id === this._selectedEventId;
+    const explainAction =
+      event.kind === "state_changed"
+        ? '<div class="event-actions"><button class="button button-small explain-button" type="button" data-explain-id="' +
+          this._escape(event.event_id) +
+          '"' +
+          (this._explainLoading && selected ? " disabled" : "") +
+          ">" +
+          (this._explainLoading && selected
+            ? "Reconstructing…"
+            : "Explain this change") +
+          "</button></div>"
+        : "";
 
     return (
       '<article class="event">' +
       '<div class="rail" aria-hidden="true"><span class="marker ' +
       this._escape(kind) +
       '"></span></div>' +
-      '<div class="event-card">' +
+      '<div class="event-card' +
+      (selected ? " selected" : "") +
+      '">' +
       '<div class="event-head">' +
       '<div class="event-heading">' +
       '<span class="kind">' +
@@ -301,6 +379,7 @@ class HAForensicLabPanel extends HTMLElement {
       "</time>" +
       "</div>" +
       (summary ? '<div class="event-summary">' + summary + "</div>" : "") +
+      explainAction +
       metadata +
       "</div>" +
       "</article>"
@@ -407,11 +486,216 @@ class HAForensicLabPanel extends HTMLElement {
     );
   }
 
+
+  _explanationView() {
+    if (!this._selectedEventId) {
+      return "";
+    }
+
+    const timelineTarget = (this._data.events || []).find(
+      (event) => event.event_id === this._selectedEventId
+    );
+
+    if (this._explainLoading) {
+      return (
+        '<section class="explain-panel" id="explanation-panel">' +
+        this._explanationHeader(timelineTarget, null) +
+        '<div class="explain-loading"><div class="spinner" aria-hidden="true"></div>' +
+        '<div><strong>Reconstructing context evidence…</strong>' +
+        '<p>Only explicit Home Assistant context relationships are followed.</p></div></div>' +
+        "</section>"
+      );
+    }
+
+    if (this._explainError) {
+      return (
+        '<section class="explain-panel" id="explanation-panel">' +
+        this._explanationHeader(timelineTarget, null) +
+        '<div class="explain-error"><strong>Could not reconstruct this change.</strong><p>' +
+        this._escape(this._explainError) +
+        '</p><button class="button primary" id="retry-explanation" type="button">Try again</button></div>' +
+        "</section>"
+      );
+    }
+
+    if (!this._explanation) {
+      return "";
+    }
+
+    const explanation = this._explanation;
+    const events = Array.isArray(explanation.events) ? explanation.events : [];
+    const edges = Array.isArray(explanation.edges) ? explanation.edges : [];
+    const gaps = Array.isArray(explanation.gaps) ? explanation.gaps : [];
+    const target =
+      events.find((event) => event.event_id === explanation.target_event_id) ||
+      timelineTarget;
+
+    const chain = events
+      .map((event, index) => {
+        const incoming =
+          index === 0
+            ? null
+            : edges.find((edge) => edge.target_event_id === event.event_id);
+        return (
+          (index === 0 ? "" : this._evidenceConnectorView(incoming)) +
+          this._explanationEventView(event, explanation.target_event_id)
+        );
+      })
+      .join("");
+
+    const gapView = gaps.length
+      ? '<div class="evidence-gaps"><div class="gap-title">Evidence gaps</div>' +
+        gaps
+          .map(
+            (gap) =>
+              '<div class="gap-row"><span class="gap-marker">!</span><span>' +
+              this._escape(this._gapLabel(gap)) +
+              "</span></div>"
+          )
+          .join("") +
+        "</div>"
+      : "";
+
+    const statusClass = explanation.complete ? "complete" : "incomplete";
+    const statusLabel = explanation.complete
+      ? "Context evidence complete"
+      : "Evidence gap";
+
+    return (
+      '<section class="explain-panel" id="explanation-panel">' +
+      this._explanationHeader(target, {
+        className: statusClass,
+        label: statusLabel,
+      }) +
+      '<div class="evidence-note"><strong>What “confirmed” means here</strong><p>' +
+      "Parent-context links come from Home Assistant context metadata. Same-context links confirm a shared change context and captured order, not direct event-to-event causation." +
+      "</p></div>" +
+      gapView +
+      '<div class="chain-heading"><span class="section-kicker">Oldest to newest</span><h3>Context evidence chain</h3></div>' +
+      '<div class="explain-chain">' +
+      chain +
+      "</div>" +
+      "</section>"
+    );
+  }
+
+  _explanationHeader(target, status) {
+    const targetIdentity =
+      target && target.entity_id
+        ? this._code(target.entity_id)
+        : "<span>Selected state change</span>";
+    const transition =
+      target && target.kind === "state_changed"
+        ? '<div class="explain-transition"><span class="state-value">' +
+          this._escape(this._nullable(target.old_state)) +
+          '</span><span class="arrow">→</span><span class="state-value">' +
+          this._escape(this._nullable(target.new_state)) +
+          "</span></div>"
+        : "";
+
+    const statusView = status
+      ? '<span class="evidence-status ' +
+        this._escape(status.className) +
+        '">' +
+        this._escape(status.label) +
+        "</span>"
+      : "";
+
+    return (
+      '<div class="explain-head"><div><span class="section-kicker">Deterministic reconstruction</span>' +
+      '<h2>Explain this change</h2><div class="explain-target">' +
+      targetIdentity +
+      transition +
+      "</div></div>" +
+      '<div class="explain-head-actions">' +
+      statusView +
+      '<button class="icon-button" id="close-explanation" type="button" aria-label="Close explanation" title="Close explanation">×</button>' +
+      "</div></div>"
+    );
+  }
+
+  _explanationEventView(event, targetEventId) {
+    const isTarget = event.event_id === targetEventId;
+    const kind = String(event.kind || "unknown");
+    const summary = this._eventSummary(event);
+    const context = event.context_id
+      ? '<span class="chain-context">Context ' + this._code(event.context_id) + "</span>"
+      : '<span class="chain-context muted">No context ID</span>';
+
+    return (
+      '<article class="chain-node' +
+      (isTarget ? " target" : "") +
+      '">' +
+      '<div class="chain-node-head"><div class="event-heading"><span class="kind">' +
+      this._escape(this._kindLabel(kind)) +
+      '</span><strong class="event-title">' +
+      this._eventTitle(event) +
+      "</strong></div><time class=\"time\">" +
+      this._escape(this._formatTime(event.timestamp)) +
+      "</time></div>" +
+      (summary ? '<div class="event-summary">' + summary + "</div>" : "") +
+      '<div class="chain-node-meta">' +
+      context +
+      (isTarget ? '<span class="target-label">Selected change</span>' : "") +
+      "</div></article>"
+    );
+  }
+
+  _evidenceConnectorView(edge) {
+    if (!edge) {
+      return (
+        '<div class="evidence-connector gap"><span class="connector-line"></span>' +
+        '<div><strong>Evidence gap</strong><span>No typed context edge captured between these anchors.</span></div></div>'
+      );
+    }
+
+    if (edge.evidence_type === "parent_context") {
+      return (
+        '<div class="evidence-connector parent"><span class="connector-line"></span>' +
+        '<div><strong>Parent context</strong><span>Confirmed: the child context explicitly points to this parent context.</span></div></div>'
+      );
+    }
+
+    return (
+      '<div class="evidence-connector same"><span class="connector-line"></span>' +
+      '<div><strong>Same context</strong><span>Confirmed shared Home Assistant context and captured order. Not proof of direct causation.</span></div></div>'
+    );
+  }
+
+  _gapLabel(gap) {
+    const value = String(gap || "");
+
+    if (value === "target_context_missing") {
+      return "The selected event has no Home Assistant context ID, so the chain cannot be extended without guessing.";
+    }
+    if (value.startsWith("parent_context_not_in_buffer:")) {
+      return "A parent context referenced by Home Assistant is no longer present in the bounded capture buffer.";
+    }
+    if (value.startsWith("context_not_in_buffer:")) {
+      return "A referenced context is not present in the current capture buffer.";
+    }
+    if (value === "event_limit_reached") {
+      return "The explanation hit its event limit before all captured context evidence could be included.";
+    }
+    if (value === "context_depth_limit_reached") {
+      return "The explanation hit its context-depth safety limit.";
+    }
+    if (value === "context_cycle_detected") {
+      return "A context cycle was detected, so reconstruction stopped safely.";
+    }
+
+    return value;
+  }
+
   _bindControls() {
     const form = this.shadowRoot.getElementById("timeline-filters");
     const refresh = this.shadowRoot.getElementById("refresh-timeline");
     const clear = this.shadowRoot.getElementById("clear-filters");
     const retry = this.shadowRoot.getElementById("retry-timeline");
+    const closeExplanation =
+      this.shadowRoot.getElementById("close-explanation");
+    const retryExplanation =
+      this.shadowRoot.getElementById("retry-explanation");
 
     if (form) {
       form.addEventListener("submit", (event) => {
@@ -447,6 +731,27 @@ class HAForensicLabPanel extends HTMLElement {
         void this._loadTimeline();
       });
     }
+
+    if (closeExplanation) {
+      closeExplanation.addEventListener("click", () => {
+        this._closeExplanation();
+      });
+    }
+
+    if (retryExplanation && this._selectedEventId) {
+      retryExplanation.addEventListener("click", () => {
+        void this._loadExplanation(this._selectedEventId);
+      });
+    }
+
+    this.shadowRoot.querySelectorAll(".explain-button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const eventId = button.dataset.explainId;
+        if (eventId) {
+          void this._loadExplanation(eventId);
+        }
+      });
+    });
   }
 
   _kindLabel(kind) {
@@ -538,13 +843,19 @@ class HAForensicLabPanel extends HTMLElement {
       ".event:first-child .rail:after{top:17px}.event:last-child .rail:after{bottom:calc(100% - 17px)}.marker{position:relative;z-index:1;width:10px;height:10px;margin-top:17px;border:3px solid var(--primary-background-color);border-radius:50%;background:var(--secondary-text-color);box-shadow:0 0 0 1px var(--divider-color)}" +
       ".marker.state_changed{background:var(--primary-color)}.marker.call_service{background:var(--warning-color,#ff9800)}.marker.automation_triggered{background:var(--success-color,#4caf50)}.marker.script_started{background:var(--accent-color,var(--primary-color))}" +
       ".event-card{min-width:0;margin-bottom:10px;padding:14px 16px;border:1px solid var(--divider-color);border-radius:14px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none)}" +
+      ".event-card.selected{border-color:var(--primary-color);box-shadow:0 0 0 1px var(--primary-color)}" +
       ".event-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.event-heading{display:flex;min-width:0;gap:9px;align-items:center;flex-wrap:wrap}.kind{padding:4px 7px;border-radius:7px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.68rem;font-weight:750;letter-spacing:.05em;text-transform:uppercase}.event-title{min-width:0;font-size:.98rem;overflow-wrap:anywhere}" +
       ".time{white-space:nowrap;color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.event-summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;line-height:1.45}.state-value{font-weight:650}.arrow,.muted{color:var(--secondary-text-color)}" +
+      ".event-actions{display:flex;gap:8px;margin-top:11px}.button-small{min-height:34px;padding:0 10px;font-size:.78rem}" +
       "code{max-width:100%;padding:2px 5px;border-radius:5px;background:var(--secondary-background-color);font-family:var(--code-font-family,ui-monospace,SFMono-Regular,Consolas,monospace);font-size:.86em;overflow-wrap:anywhere}" +
       "details{margin-top:11px;padding-top:9px;border-top:1px solid var(--divider-color)}summary{width:max-content;color:var(--secondary-text-color);font-size:.78rem;cursor:pointer}.metadata{display:grid;gap:6px;margin-top:9px}.metadata-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:baseline;font-size:.78rem}.metadata-row>span{color:var(--secondary-text-color)}" +
+      ".explain-panel{margin:0 0 28px;padding:20px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none);scroll-margin-top:16px}" +
+      ".explain-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.explain-head h2{margin:4px 0 8px;font-size:1.35rem}.explain-target{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.explain-transition{display:flex;gap:7px;align-items:center}.explain-head-actions{display:flex;gap:8px;align-items:center}.icon-button{width:36px;height:36px;border:1px solid var(--divider-color);border-radius:10px;color:var(--primary-text-color);background:var(--primary-background-color);font-size:1.35rem;line-height:1;cursor:pointer}.evidence-status{padding:5px 8px;border-radius:999px;font-size:.72rem;font-weight:750}.evidence-status.complete{background:var(--success-color,#4caf50);color:var(--text-primary-color,#fff)}.evidence-status.incomplete{background:var(--warning-color,#ff9800);color:var(--text-primary-color,#fff)}" +
+      ".evidence-note{margin:16px 0;padding:13px 14px;border-left:3px solid var(--primary-color);border-radius:8px;background:var(--secondary-background-color)}.evidence-note strong{font-size:.84rem}.evidence-note p{margin:4px 0 0;color:var(--secondary-text-color);font-size:.82rem;line-height:1.5}.evidence-gaps{display:grid;gap:7px;margin:14px 0;padding:12px 14px;border:1px solid var(--divider-color);border-radius:10px}.gap-title{font-size:.78rem;font-weight:750;text-transform:uppercase;letter-spacing:.05em;color:var(--secondary-text-color)}.gap-row{display:grid;grid-template-columns:20px 1fr;gap:7px;align-items:start;font-size:.82rem;line-height:1.45}.gap-marker{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--warning-color,#ff9800);color:var(--text-primary-color,#fff);font-weight:800;font-size:.7rem}" +
+      ".chain-heading{margin:20px 0 10px}.chain-heading h3{margin:3px 0 0;font-size:1rem}.explain-chain{display:grid;max-width:900px}.chain-node{padding:13px 14px;border:1px solid var(--divider-color);border-radius:12px;background:var(--primary-background-color)}.chain-node.target{border-color:var(--primary-color);box-shadow:0 0 0 1px var(--primary-color)}.chain-node-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.chain-node-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;color:var(--secondary-text-color);font-size:.75rem}.target-label{padding:3px 6px;border-radius:6px;background:var(--primary-color);color:var(--text-primary-color,#fff);font-weight:700}.evidence-connector{display:grid;grid-template-columns:18px 1fr;gap:9px;min-height:46px;align-items:center;padding:3px 10px;color:var(--secondary-text-color)}.connector-line{justify-self:center;width:2px;height:100%;min-height:34px;background:var(--divider-color)}.evidence-connector.parent .connector-line{background:var(--primary-color)}.evidence-connector strong{display:block;color:var(--primary-text-color);font-size:.78rem}.evidence-connector span:not(.connector-line){display:block;margin-top:2px;font-size:.74rem;line-height:1.35}.explain-loading,.explain-error{display:flex;gap:12px;align-items:center;margin-top:16px;padding:20px;border:1px dashed var(--divider-color);border-radius:12px}.explain-loading p,.explain-error p{margin:3px 0 0;color:var(--secondary-text-color);font-size:.82rem}" +
       ".state-card{display:grid;justify-items:center;gap:8px;padding:48px 24px;border:1px dashed var(--divider-color);border-radius:16px;text-align:center;background:var(--card-background-color)}.state-card p{max-width:580px;margin:0;color:var(--secondary-text-color);line-height:1.5}.error-card{border-style:solid}.spinner{width:24px;height:24px;border:3px solid var(--divider-color);border-top-color:var(--primary-color);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}" +
       "footer{margin-top:30px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.5}" +
-      "@media(max-width:820px){main{padding:24px 16px 48px}.hero{display:grid}.status{width:max-content}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}form{grid-template-columns:1fr}.actions{flex-wrap:wrap}.event{grid-template-columns:20px minmax(0,1fr)}.event-head{display:grid;gap:7px}.time{order:-1}.metadata-row{grid-template-columns:1fr;gap:2px}}" +
+      "@media(max-width:820px){main{padding:24px 16px 48px}.hero{display:grid}.status{width:max-content}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}form{grid-template-columns:1fr}.actions{flex-wrap:wrap}.event{grid-template-columns:20px minmax(0,1fr)}.event-head,.chain-node-head{display:grid;gap:7px}.time{order:-1}.metadata-row{grid-template-columns:1fr;gap:2px}.explain-head{display:grid}.explain-head-actions{justify-content:space-between;order:-1}.evidence-status{order:2}}" +
       "</style>"
     );
   }

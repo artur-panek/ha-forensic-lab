@@ -7,7 +7,7 @@ HA Forensic Lab is an experimental Home Assistant custom integration for reconst
 The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
 
 > [!IMPORTANT]
-> HA Forensic Lab is pre-alpha. The current development stack captures a minimal normalized runtime event stream into a bounded in-memory buffer and exposes it through an admin-only timeline. Persistent storage and causal reconstruction are not implemented yet.
+> HA Forensic Lab is pre-alpha. The current development stack captures a minimal normalized runtime event stream into a bounded in-memory buffer and exposes it through an admin-only timeline. Persistent storage is not implemented yet; deterministic context-based reconstruction is available for captured state changes.
 
 ## The problem
 
@@ -84,6 +84,9 @@ The sidebar timeline can currently:
 - expose context, parent context, user and event identifiers as evidence metadata
 - report recorder buffer usage
 - refresh on demand
+- run **Explain this change** for captured state changes
+- inspect typed parent-context and same-context evidence without conflating shared context with direct causation
+- see explicit gaps when the bounded buffer cannot support a complete reconstruction
 
 The frontend talks only to the admin-only Home Assistant WebSocket API; it does not read internal storage directly.
 
