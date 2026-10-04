@@ -1,7 +1,6 @@
 # Context causality
 
-HA Forensic Lab reconstructs deterministic evidence from Home Assistant
-contexts before it considers any timing-based inference.
+HA Forensic Lab reconstructs relationships from Home Assistant contexts.
 
 The underlying Home Assistant behavior is documented in the
 [Home Assistant Context documentation](https://data.home-assistant.io/docs/context/).
@@ -49,7 +48,7 @@ evidence_type = same_context_sequence
 This does **not** mean the earlier event is proven to directly cause the next
 event. The UI and API must preserve that distinction.
 
-## What is not implemented yet
+## Missing evidence
 
 v0.1 does not create timing-only causal edges.
 
@@ -82,4 +81,4 @@ accepts an event ID from the current timeline buffer and returns:
 - typed evidence edges
 - explicit evidence gaps
 
-This is the deterministic backend for the future **Explain this change** view.
+The panel uses this response for **Explain this change**.

@@ -40,7 +40,7 @@ def test_manifest_contract() -> None:
 
 
 def test_hacs_manifest_exists() -> None:
-    """Keep the repository installable through HACS later."""
+    """Keep the repository installable through HACS."""
     hacs = _read_json(ROOT / "hacs.json")
 
     assert hacs["name"] == "HA Forensic Lab"

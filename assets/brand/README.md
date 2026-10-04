@@ -1,6 +1,6 @@
 # HA Forensic Lab visual identity
 
-The production mark is derived from the selected **waveform + trace lens** concept.
+The mark is derived from the selected **waveform + trace lens** concept.
 
 ## Meaning
 

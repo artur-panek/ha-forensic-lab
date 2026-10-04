@@ -1,6 +1,6 @@
 # Runtime event model
 
-The capture layer deliberately keeps a **small forensic index**, not raw Home Assistant event payloads.
+Capture keeps normalized fields from supported Home Assistant events.
 
 ## Captured event kinds
 
@@ -35,7 +35,7 @@ Depending on the event type it may also contain:
 
 ## Deliberate omissions
 
-This stage does **not** retain:
+Capture omits:
 
 - state attributes
 - complete service_data
@@ -44,9 +44,6 @@ This stage does **not** retain:
 - rendered templates
 - message bodies
 
-That is intentional. Those values are frequently large and can be sensitive.
-
-Future richer evidence should be stored separately, bounded independently, and only when it materially improves incident reconstruction.
 
 ## Event IDs and capture sessions
 

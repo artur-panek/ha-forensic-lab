@@ -2,17 +2,18 @@
 
 This checklist is the gate for the first public testing build.
 
-A checked box means the behavior has been verified, not merely implemented.
+Use a copy of this checklist for each exact candidate SHA. A checked box means
+the behavior has been verified and recorded in the test report.
 
 ## Repository and packaging
 
-- [ ] all stacked implementation PRs intended for alpha are merged in order
+- [ ] all intended changes are included in the tested candidate commit
 - [ ] default branch CI is green
 - [ ] hassfest passes on default branch
 - [ ] HACS validation passes on default branch
 - [ ] repository description/homepage/topics are final
 - [ ] MIT license is present and detected
-- [ ] production brand icon renders correctly in HACS
+- [ ] local brand icon renders correctly in HACS
 - [ ] README accurately labels the release as an unreleased alpha candidate
 - [ ] manifest version matches the intended release tag
 - [ ] CHANGELOG has a matching version section
@@ -59,7 +60,7 @@ A checked box means the behavior has been verified, not merely implemented.
 - [ ] Recorder health renders on a real instance
 - [ ] normal-use callback average recorded
 - [ ] normal-use callback maximum recorded
-- [ ] persistence writes complete without failures
+- [ ] storage logs are clean and written evidence survives restart
 - [ ] no material Home Assistant event-loop/log regression observed during the test window
 - [ ] at least one busy-instance or synthetic high-activity test completed
 
@@ -78,9 +79,8 @@ A checked box means the behavior has been verified, not merely implemented.
 Do not call the build alpha-ready until the real-instance checks above have been
 performed.
 
-Current CI proves repository correctness and packaging reproducibility only; it
-is not evidence that the integration has completed a real Home Assistant
-lifecycle test.
+CI covers code checks, unit regressions, HA helper compatibility and packaging.
+The full installation and lifecycle checks still require a real test instance.
 
 Only after this checklist passes should the exact manifest version tag described
 in [releasing.md](releasing.md) be pushed.

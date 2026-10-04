@@ -160,8 +160,6 @@ const contexts = {
   assert.equal(projected.truncated, true);
 }
 
-console.log("trace projection tests passed");
-
 {
   const projected = projectTrace({
     state: "SECRET_TOKEN_123",

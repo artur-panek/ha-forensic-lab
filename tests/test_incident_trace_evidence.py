@@ -3,53 +3,18 @@
 from __future__ import annotations
 
 import base64
-import importlib.util
 import io
 import json
-import sys
 import zipfile
-from pathlib import Path
-from types import ModuleType
 
-ROOT = Path(__file__).parents[1]
-INTEGRATION = ROOT / "custom_components" / "ha_forensic_lab"
-PACKAGE = "ha_forensic_lab_incident_trace_test"
+from tests.support import load_module
 
-
-def _load_module(name: str, path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    assert spec.loader is not None
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-package = ModuleType(PACKAGE)
-package.__path__ = [str(INTEGRATION)]
-sys.modules[PACKAGE] = package
-
-models = _load_module(f"{PACKAGE}.models", INTEGRATION / "models.py")
-trace_evidence = _load_module(
-    f"{PACKAGE}.trace_evidence",
-    INTEGRATION / "trace_evidence.py",
-)
-storage_codec = _load_module(
-    f"{PACKAGE}.storage_codec",
-    INTEGRATION / "storage_codec.py",
-)
-incidents = _load_module(f"{PACKAGE}.incidents", INTEGRATION / "incidents.py")
-incident_codec = _load_module(
-    f"{PACKAGE}.incident_codec",
-    INTEGRATION / "incident_codec.py",
-)
-sanitizer = _load_module(f"{PACKAGE}.sanitizer", INTEGRATION / "sanitizer.py")
-export_bundle = _load_module(
-    f"{PACKAGE}.export_bundle",
-    INTEGRATION / "export_bundle.py",
-)
+models = load_module("models")
+trace_evidence = load_module("trace_evidence")
+incidents = load_module("incidents")
+incident_codec = load_module("incident_codec")
+sanitizer = load_module("sanitizer")
+export_bundle = load_module("export_bundle")
 
 
 def _event():

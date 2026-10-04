@@ -1,7 +1,6 @@
 # Known limitations
 
-HA Forensic Lab is pre-alpha software. These boundaries are deliberate and
-should be visible to testers.
+HA Forensic Lab is an unreleased alpha candidate.
 
 ## Rolling persistence is not a write-ahead log
 
@@ -11,7 +10,11 @@ A hard process or host crash may lose events captured since the last completed
 snapshot. A clean Home Assistant shutdown or integration unload flushes
 immediately.
 
-Saved incidents are written separately and immediately.
+HA can log rolling-storage failures without raising them, so zero reported save
+errors is not proof of disk durability. Check storage logs and restart behavior.
+
+Saved-incident writes are serialized and read back before success is reported.
+Incident changes are rejected while HA is stopping.
 
 ## Home Assistant trace retention is finite
 

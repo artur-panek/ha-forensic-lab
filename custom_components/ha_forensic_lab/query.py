@@ -3,50 +3,25 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Any, Protocol
+from typing import Any
 
-
-class EventKindLike(Protocol):
-    """Minimal enum-like kind shape used by the query layer."""
-
-    @property
-    def value(self) -> str:
-        """Return the serialized event kind."""
-
-
-class ForensicEventLike(Protocol):
-    """Minimal forensic event shape required by the query layer."""
-
-    event_id: str
-    kind: EventKindLike
-    timestamp: float
-    context_id: str | None
-    parent_context_id: str | None
-    user_id: str | None
-    entity_id: str | None
-    domain: str | None
-    service: str | None
-    name: str | None
-    source: str | None
-    target_entity_ids: tuple[str, ...]
-    old_state: str | None
-    new_state: str | None
+from .models import ForensicEvent
 
 
 def query_events(
-    events: Iterable[ForensicEventLike],
+    events: Iterable[ForensicEvent],
     *,
     limit: int = 100,
     entity_id: str | None = None,
     context_id: str | None = None,
     kind: str | None = None,
     since: float | None = None,
-) -> tuple[ForensicEventLike, ...]:
+) -> tuple[ForensicEvent, ...]:
     """Return newest matching events first."""
     if limit < 1:
         raise ValueError("limit must be at least 1")
 
-    matches: list[ForensicEventLike] = []
+    matches: list[ForensicEvent] = []
     event_list = tuple(events)
 
     for event in reversed(event_list):
@@ -69,8 +44,8 @@ def query_events(
     return tuple(matches)
 
 
-def event_to_dict(event: ForensicEventLike) -> dict[str, Any]:
-    """Serialize one normalized event for the Home Assistant WebSocket API."""
+def event_to_dict(event: ForensicEvent) -> dict[str, Any]:
+    """Serialize a normalized event for storage and WebSocket responses."""
     return {
         "event_id": event.event_id,
         "kind": event.kind.value,
@@ -89,5 +64,5 @@ def event_to_dict(event: ForensicEventLike) -> dict[str, Any]:
     }
 
 
-def _matches_entity(event: ForensicEventLike, entity_id: str) -> bool:
+def _matches_entity(event: ForensicEvent, entity_id: str) -> bool:
     return event.entity_id == entity_id or entity_id in event.target_entity_ids

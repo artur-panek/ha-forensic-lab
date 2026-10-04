@@ -74,7 +74,7 @@ class CaptureMetrics:
 
 @dataclass(slots=True)
 class PersistenceMetrics:
-    """Aggregate rolling-store I/O counters."""
+    """Aggregate Store call counters; HA may log disk errors without raising."""
 
     load_count: int = 0
     restored_events: int = 0

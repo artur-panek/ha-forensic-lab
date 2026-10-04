@@ -1,46 +1,45 @@
 # Contributing
 
-HA Forensic Lab is pre-alpha. Small, reviewable changes are preferred over broad rewrites.
-
-## Principles
-
-1. Preserve the distinction between evidence and inference.
-2. Avoid private Home Assistant APIs when a supported API exists.
-3. Keep capture overhead bounded.
-4. Do not add cloud dependencies for core forensic functionality.
-5. Do not store more user data than the feature needs.
+Keep changes reviewable. Preserve context evidence semantics, bounded capture,
+admin-only access and the separation between local evidence and sanitized export.
+Use supported Home Assistant APIs and keep filesystem work off the event loop.
 
 ## Local checks
 
-Use the Python version in .python-version, then run:
+Use the Python version in `.python-version` and Node.js 24:
 
 ~~~bash
 python -m pip install pytest ruff
-ruff check custom_components tests
-python -m compileall -q custom_components
+ruff check custom_components tests scripts/build_release.py
+python -m compileall -q custom_components scripts/build_release.py
 pytest -q
+for source in custom_components/ha_forensic_lab/frontend/*.js custom_components/ha_forensic_lab/frontend/*.mjs scripts/alpha-smoke.mjs; do
+  node --check "$source"
+done
+node --test tests/js/*.mjs
+python scripts/build_release.py --output dist
 ~~~
 
-Pull requests are also checked by hassfest and the HACS validation action.
+Pure Python tests load integration modules through `tests/support.py`, without
+running HA setup. Tests in `tests/ha_runtime` skip when HA is absent. Run those
+against the declared baseline in a separate virtual environment:
 
-## Home Assistant development test
-
-For a real instance, copy or symlink:
-
-~~~text
-custom_components/ha_forensic_lab
+~~~bash
+python -m pip install homeassistant==2026.9.4 pytest
+python -m pytest -q tests/ha_runtime
 ~~~
 
-into the test Home Assistant configuration's custom_components directory, restart Home Assistant, then add **HA Forensic Lab** from **Settings → Devices & services**.
-
-The current foundation build should create a single config entry and expose an admin-only sidebar panel.
+These tests exercise HA schemas, storage and event-bus behavior in temporary
+directories. They do not boot an installation or replace the
+[real-instance test matrix](docs/alpha-testing.md). CI also runs hassfest and HACS
+validation.
 
 ## Pull requests
 
-A useful PR should state:
+Describe the problem, changed behavior and verification. Call out any changes to
+stored data, evidence classification, privacy or capture cost. Add regression
+tests for bugs; do not introduce an abstraction solely to make a test possible.
 
-- the forensic problem it solves
-- whether it changes stored data
-- whether it changes evidence classification
-- expected performance impact
-- how it was tested
+Use [installation.md](docs/installation.md) for deployment to a test instance.
+Keep the version unreleased until the
+[release checklist](docs/alpha-release-checklist.md) passes.

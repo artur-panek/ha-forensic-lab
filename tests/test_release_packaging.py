@@ -2,27 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 import zipfile
 from pathlib import Path
 
-ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "scripts" / "build_release.py"
+import pytest
 
-
-def _load_module():
-    spec = importlib.util.spec_from_file_location("release_builder", SCRIPT)
-    assert spec is not None
-    assert spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-builder = _load_module()
+from scripts import build_release as builder
 
 
 def test_manifest_version_has_matching_changelog_section() -> None:
@@ -37,12 +23,8 @@ def test_manifest_version_has_matching_changelog_section() -> None:
 def test_release_tag_must_match_manifest_version() -> None:
     version = builder.read_version()
 
-    try:
+    with pytest.raises(ValueError, match="does not match manifest version"):
         builder.validate_release_contract(version, "v9.9.9")
-    except ValueError as error:
-        assert "does not match manifest version" in str(error)
-    else:
-        raise AssertionError("Expected tag/version contract failure")
 
 
 def test_manual_release_zip_is_deterministic_and_has_runtime_root(

@@ -2,28 +2,10 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-from types import ModuleType
+from tests.support import load_module
 
-ROOT = Path(__file__).parents[1]
-INTEGRATION = ROOT / "custom_components" / "ha_forensic_lab"
-
-
-def _load_module(name: str, path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    assert spec.loader is not None
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-models = _load_module("ha_forensic_lab_test_models", INTEGRATION / "models.py")
-query = _load_module("ha_forensic_lab_test_query", INTEGRATION / "query.py")
+models = load_module("models")
+query = load_module("query")
 
 
 def _event(

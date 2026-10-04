@@ -1,187 +1,79 @@
 # Architecture
 
-## Design principle
+HA Forensic Lab has one config entry, an admin-only sidebar panel and an
+admin-only WebSocket API. It reads runtime events and retained traces. It does
+not call services, modify automations or use the Recorder database.
 
-**Record evidence first. Interpret it second.**
+## Runtime path
 
-HA Forensic Lab should preserve enough runtime evidence to reconstruct an incident while remaining explicit about what is proven and what is merely correlated.
+1. `capture.py` listens for `state_changed`, `call_service`,
+   `automation_triggered` and `script_started`.
+2. `models.py` extracts normalized fields. `capture_policy.py` applies enabled
+   kinds and entity/domain exclusions before retention.
+3. Accepted events enter a bounded deque. The first dirty notification schedules
+   a rolling snapshot; subsequent events do not postpone its deadline.
+4. `websocket.py` queries an immutable snapshot for the timeline or explanation.
+   The panel refreshes through requests; it does not subscribe to a live stream.
+5. Saving an incident freezes a window from the current deque into a separate
+   store. Review and export use those frozen events.
 
-## Proposed data flow
+## Modules
 
-~~~mermaid
-flowchart LR
-    BUS[Home Assistant event bus]
-    CAPTURE[Capture layer]
-    NORMALIZE[Normalizer]
-    BUFFER[Bounded event store]
-    CAUSAL[Causality engine]
-    API[Query / WebSocket API]
-    UI[Forensic Lab panel]
-    INCIDENT[Saved incidents]
+| Responsibility | Modules |
+| --- | --- |
+| Setup, unload, final-write hook, options | `__init__.py`, `config_flow.py`, `const.py` |
+| Event normalization and capture | `models.py`, `capture.py`, `capture_policy.py` |
+| Filtering and event serialization | `query.py` |
+| Context reconstruction | `causality.py` |
+| Rolling storage and decoding | `store.py`, `storage_codec.py` |
+| Incident creation, storage and review | `incidents.py`, `incident_store.py`, `incident_codec.py`, `incident_review.py` |
+| Trace validation | `trace_evidence.py`, `frontend/trace-projection.mjs` |
+| Export policy and ZIP construction | `sanitizer.py`, `export_bundle.py` |
+| Aggregate counters and diagnostics | `metrics.py`, `diagnostics_data.py`, `diagnostics.py` |
+| Admin API and panel | `websocket.py`, `frontend/ha-forensic-lab-panel.js`, `frontend/panel-styles.mjs` |
 
-    BUS --> CAPTURE
-    CAPTURE --> NORMALIZE
-    NORMALIZE --> BUFFER
-    BUFFER --> CAUSAL
-    CAUSAL --> API
-    BUFFER --> API
-    API --> UI
-    UI --> INCIDENT
-~~~
+The event model, query, causality, codecs, trace validation and sanitizer have no
+HA imports. Tests can use these modules without booting HA.
 
-## 1. Capture layer
+## Evidence
 
-The capture layer subscribes only to runtime sources that materially improve reconstruction.
+`parent_context` links contexts using HA's explicit parent IDs. The selected
+parent event is an anchor, not necessarily a uniquely identified trigger.
+`same_context_sequence` records shared context and capture order, not direct
+causation. Both have the `confirmed` evidence class. The engine emits gaps when
+context is missing or traversal hits a bound; it produces no timing-only edges.
 
-Initial candidates are:
+See [causality.md](causality.md) for traversal rules and gap values.
 
-- state_changed
-- call_service
-- automation_triggered
-- script_started
+## Persistence and lifecycle
 
-The capture layer should do as little work as possible on the event loop. Heavy normalization or persistence should be deferred.
+Both stores use HA's versioned `Store` helper, private permissions, atomic writes
+and JSON serialization outside the event loop.
 
-## 2. Normalized event model
+Setup loads the rolling snapshot, reapplies current filters and capacity, loads
+saved incidents, then starts capture. Option changes reload the entry. Unload
+stops capture and flushes pending rolling data. The HA final-write event also
+stops capture and flushes the buffer before process shutdown.
 
-The storage model should not depend on retaining arbitrary Home Assistant event objects forever.
+Rolling persistence uses a timer and a write lock. It is best effort: HA's helper
+can log disk errors without raising them, so aggregate save counters are not
+proof of disk durability. See [persistence.md](persistence.md).
 
-A normalized event should be able to represent at least:
+Incident mutations use a separate lock and read back the stored collection
+before changing visible state or acknowledging success. They are rejected while
+HA is stopping because the helper can defer writes at that point. Incidents
+survive rolling-buffer eviction and capture-option changes.
 
-~~~text
-event_id
-timestamp
-event_type
-entity_id?
-domain?
-service?
-old_state?
-new_state?
-context_id?
-parent_context_id?
-user_id?
-source_ref?
-payload_ref?
-~~~
+## Trace and export boundaries
 
-Large or sensitive payloads should be separated from the searchable index.
+The panel requests HA's `trace/contexts` and `trace/get` on demand, then discards
+raw config, variables and arbitrary results. At most 200 structural steps can be
+attached to a saved incident; the backend validates that projection again.
 
-## 3. Evidence edges
+Export applies the sanitizer to a frozen incident and builds the ZIP in an
+executor. Domains, relative timing and structural outcomes remain in the bundle;
+identifiers and free text follow the [export policy](export.md).
 
-Causal analysis produces typed relationships between normalized event anchors.
-
-Each edge carries:
-
-~~~text
-source_event_id
-target_event_id
-evidence_class
-evidence_type
-source_context_id?
-target_context_id?
-~~~
-
-### Confirmed does not always mean direct causation
-
-Two deterministic relationship types are currently modeled:
-
-- **parent_context**: the child Home Assistant context explicitly points to the parent context that started it.
-- **same_context_sequence**: events are confirmed to belong to the same Home Assistant context and are shown in captured order.
-
-A same-context sequence is **not** a claim that the earlier event directly caused the later event. It is a confirmed relationship plus chronology.
-
-The parent-context event shown by HA Forensic Lab is a captured anchor for the parent context. When several events share that parent context, the tool must not pretend one specific event is uniquely proven to be the trigger.
-
-### Correlated
-
-Future correlation may use evidence such as:
-
-- close timestamps
-- an entity change following a relevant service call when context is unavailable
-- surrounding events that are useful to inspect but cannot be proven causal
-
-Correlation must never be displayed as confirmed causation.
-
-See [context causality](causality.md) for the current deterministic rules.
-
-## 4. Storage
-
-v0.1 should use a dedicated, bounded local store rather than treating Home Assistant's Recorder database as its own schema.
-
-Suggested model:
-
-- lightweight searchable index for a configurable short retention window
-- optional richer payload ring buffer
-- durable saved incidents copied out of the rolling window
-- periodic pruning
-
-The integration must avoid unbounded growth.
-
-## 5. Query layer
-
-The frontend should not query implementation-specific storage directly.
-
-Expose a small internal API for:
-
-- timeline queries
-- entity-change explanation
-- context-chain expansion
-- incident creation/list/read/delete
-- sanitized incident export
-
-A Home Assistant WebSocket API is the preferred direction for interactive panel queries.
-
-## 6. Frontend
-
-The frontend is a native sidebar custom panel.
-
-Primary views:
-
-1. **Timeline**
-2. **Explain**
-3. **Incidents**
-4. **Evidence**
-
-The first production UI should optimize for answering a question, not for showing every possible event.
-
-## 7. Security and privacy
-
-The panel is admin-only.
-
-Potentially sensitive fields include:
-
-- user IDs
-- entity names
-- service payloads
-- text states
-- automation variables
-- trace variables
-- URLs/tokens accidentally present in payloads
-
-Exports must use an explicit sanitizer and should be safe-by-default rather than raw-by-default.
-
-## 8. Failure boundaries
-
-HA Forensic Lab must fail open with respect to the smart home:
-
-- recorder failure must not block Home Assistant events
-- storage pressure must drop or degrade forensic detail rather than destabilize Core
-- analysis failure must not affect automations
-- panel failure must not affect capture
-- uninstall must not mutate user automations or Recorder data
-
-## v0.1 module direction
-
-The implementation is being introduced in narrow layers:
-
-~~~text
-capture.py
-models.py
-query.py
-causality.py
-websocket.py
-incidents.py
-sanitizer.py
-~~~
-
-Persistence, incidents and sanitization should be introduced only when their responsibility is implemented.
+Capture uses a bounded synchronous callback. Disk writes and ZIP construction
+run separately, and panel request failures do not stop event capture. Retention
+bounds and unavailable evidence are documented in [known limitations](known-limitations.md).

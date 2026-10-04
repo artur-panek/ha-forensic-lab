@@ -29,12 +29,6 @@ class ContextLike(Protocol):
     user_id: str | None
 
 
-class StateLike(Protocol):
-    """Minimal Home Assistant state shape required for normalization."""
-
-    state: str
-
-
 class EventLike(Protocol):
     """Minimal Home Assistant event shape required for normalization."""
 

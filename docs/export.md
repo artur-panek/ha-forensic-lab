@@ -1,81 +1,40 @@
 # Sanitized incident export
 
-HA Forensic Lab exports saved incidents using one safe-by-default profile.
+The only v0.1 export profile is `safe` (sanitizer version 2). There is no raw
+export option.
 
-v0.1 deliberately does **not** provide a raw-export toggle.
+## Bundle
 
-## Bundle layout
+The ZIP contains `manifest.json`, `incident.json` and `summary.md`. Member
+metadata is deterministic. ZIP construction runs outside the HA event loop.
+The admin-only WebSocket response includes its filename, content type, base64
+data, byte size, profile and SHA-256 digest.
 
-The export is a ZIP containing:
+## Field policy
 
-~~~text
-manifest.json
-incident.json
-summary.md
-~~~
+| Input | Export |
+| --- | --- |
+| Absolute event/creation timestamps | Removed; event times become offsets from the window start |
+| Incident title | Generic title |
+| User IDs | Removed |
+| Event/context IDs | Per-export aliases |
+| Entity and trace item IDs | Aliases retaining the domain |
+| Trace run IDs | Per-export aliases |
+| Automation/script names and trigger descriptions | Redacted |
+| State strings | `on`, `off`, `open`, `closed`, `locked`, `unlocked`, `idle`, `playing`, `paused`, `standby`, `unavailable`, `unknown`; everything else redacted |
+| Service names | `turn_on`, `turn_off`, `toggle`, `reload` remain readable; other names receive aliases |
+| Direct script calls | Use the same entity alias mapping as other references to that script |
+| Trace status, paths and branch choices | Structural vocabulary allowlist; numeric branch indexes retained |
+| Trace condition results | Booleans only |
 
-The ZIP is generated with deterministic member metadata and includes a SHA-256 digest in the WebSocket response.
+Event kinds, domains, order, relative timing and relationships between aliased
+identifiers remain visible. Aliases are consistent within a bundle; they are
+not cross-export identities. This is pseudonymization, not guaranteed anonymity.
+Review a bundle before sharing it.
 
-## Safe profile
+## Bounds
 
-The safe profile preserves diagnostic structure while reducing disclosure risk.
-
-### Removed or redacted
-
-- absolute event timestamps are removed
-- incident creation time is removed
-- incident title is replaced with a generic title
-- Home Assistant user IDs are removed
-- event IDs are replaced with stable per-export aliases
-- context IDs are replaced with stable per-export aliases
-- entity IDs are pseudonymized while retaining the domain
-- automation/script names are redacted
-- automation trigger source text is redacted
-- non-allowlisted state strings are redacted
-
-### Preserved
-
-The following are retained because they materially help debugging:
-
-- event type
-- event ordering
-- time offsets relative to the incident window
-- entity domain
-- service domain and service name
-- stable relationships between pseudonymized entity/event/context identifiers
-- a small allowlist of generic state values such as on/off/open/closed/idle/playing
-- safe trace paths, boolean condition outcomes and simple branch choices when frozen trace evidence is present
-
-The aliases are stable only within one exported incident. They are not intended to be stable identifiers across exports.
-
-When an incident contains frozen trace evidence, its automation/script identity, run ID and context ID are pseudonymized using the same per-export alias context. Raw Home Assistant trace payloads are never part of the bundle.
-
-## Transport
-
-The admin-only WebSocket export command returns:
-
-- filename
-- content_type
-- encoding
-- base64 ZIP data
-- SHA-256
-- byte size
-- sanitizer profile
-
-ZIP construction runs outside the Home Assistant event loop.
-
-## Limits
-
-Export operates only on a saved incident, so it inherits saved-incident bounds:
-
-- maximum 500 frozen events per incident
-- no raw event payloads
-- no complete service_data
-- no trace variables in the current implementation
-
-The sanitizer should remain a separately tested module as richer evidence types are added.
-
-Custom service names (including direct script calls and named notification
-services) are pseudonymized. Only generic turn_on/turn_off/toggle/reload service
-names remain readable. Trace status, branch choices and path segments use a
-structural vocabulary allowlist; arbitrary identifier-shaped text is not evidence.
+Export uses one saved incident, with at most 500 frozen events and 200 structural
+trace steps. Raw event payloads, complete service data, trace config, variables
+and arbitrary action results are not included. Tests seed sensitive strings and
+check their absence from the unpacked bundle.
