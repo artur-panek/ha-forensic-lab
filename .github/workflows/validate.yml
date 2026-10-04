@@ -48,6 +48,10 @@ jobs:
       - name: Compile Python
         run: python -m compileall -q custom_components
       - name: Check frontend syntax
-        run: node --check custom_components/ha_forensic_lab/frontend/ha-forensic-lab-panel.js
+        run: |
+          node --check custom_components/ha_forensic_lab/frontend/ha-forensic-lab-panel.js
+          node --check custom_components/ha_forensic_lab/frontend/trace-projection.mjs
+      - name: Frontend unit tests
+        run: node tests/js/test_trace_projection.mjs
       - name: Repository tests
         run: pytest -q

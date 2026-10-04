@@ -11,7 +11,7 @@ HA Forensic Lab is an experimental Home Assistant custom integration for reconst
 The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
 
 > [!IMPORTANT]
-> HA Forensic Lab is pre-alpha. The current development stack captures and persists a bounded normalized runtime stream, provides an admin-only timeline, supports deterministic context reconstruction, freezes durable saved incidents, and exports safe-profile sanitized incident bundles directly from the sidebar.
+> HA Forensic Lab is pre-alpha. The current development stack captures and persists a bounded normalized runtime stream, provides an admin-only timeline, supports deterministic context reconstruction with live Home Assistant trace enrichment, freezes durable saved incidents, and exports safe-profile sanitized incident bundles directly from the sidebar.
 
 ## The problem
 
@@ -55,6 +55,7 @@ Implemented in the development stack:
 - private atomic rolling snapshot persistence
 - admin-only searchable timeline
 - deterministic context-based **Explain this change**
+- live automation/script trace enrichment with a privacy-reduced structural projection
 - **Save incident** directly from a state-change event
 - durable saved incidents in a separate private store
 - saved-incident list and management in the sidebar
@@ -67,7 +68,7 @@ Safe export preserves diagnostic structure but pseudonymizes identifiers, remove
 
 Still intentionally missing from v0.1:
 
-- trace ingestion
+- persistence/export of the safe trace projection
 - timing-only correlated evidence
 - anomaly detection
 - AI root-cause summaries
@@ -96,6 +97,8 @@ The panel and WebSocket API are admin-only.
 Persistent rolling snapshots and saved incidents use Home Assistant private storage mode. Raw event payloads and complete service data are not retained.
 
 The current UI HTML-escapes values returned from Home Assistant before rendering them.
+
+Full Home Assistant traces are queried live through the admin-only trace WebSocket API and immediately reduced to structural paths/outcomes in panel memory. Config, blueprint inputs, variables, error text and arbitrary result payloads are not persisted by HA Forensic Lab. See [`docs/trace-enrichment.md`](docs/trace-enrichment.md).
 
 Sanitized incident export is safe-only in v0.1. The sanitizer is a separate tested module and export ZIPs include a SHA-256 digest.
 

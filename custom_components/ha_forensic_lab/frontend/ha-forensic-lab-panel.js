@@ -1,3 +1,5 @@
+import { projectTrace, resolveTraceReference } from "./trace-projection.mjs";
+
 class HAForensicLabPanel extends HTMLElement {
   constructor() {
     super();
@@ -23,6 +25,10 @@ class HAForensicLabPanel extends HTMLElement {
     this._explainLoading = false;
     this._explainError = null;
     this._explainRequestId = 0;
+    this._traceProjection = null;
+    this._traceLoading = false;
+    this._traceError = null;
+    this._traceRequestId = 0;
     this._incidents = [];
     this._incidentsLoaded = false;
     this._incidentsLoading = false;
@@ -309,6 +315,7 @@ class HAForensicLabPanel extends HTMLElement {
       }
 
       this._explanation = data;
+      void this._loadTraceForExplanation(data, eventId);
     } catch (error) {
       if (requestId !== this._explainRequestId) {
         return;
@@ -332,12 +339,84 @@ class HAForensicLabPanel extends HTMLElement {
     }
   }
 
+
+  async _loadTraceForExplanation(explanation, eventId) {
+    if (!this._hass || !explanation) {
+      return;
+    }
+
+    const requestId = ++this._traceRequestId;
+    this._traceProjection = null;
+    this._traceError = null;
+    this._traceLoading = true;
+    this._render();
+
+    try {
+      const contexts = await this._hass.callWS({
+        type: "trace/contexts",
+      });
+
+      if (requestId !== this._traceRequestId) {
+        return;
+      }
+
+      const reference = resolveTraceReference(
+        Array.isArray(explanation.events) ? explanation.events : [],
+        eventId,
+        contexts
+      );
+
+      if (!reference) {
+        this._traceProjection = {
+          status: "unavailable",
+          reason:
+            "No retained Home Assistant automation or script trace matched this context chain.",
+        };
+        return;
+      }
+
+      const rawTrace = await this._hass.callWS({
+        type: "trace/get",
+        domain: reference.domain,
+        item_id: reference.item_id,
+        run_id: reference.run_id,
+      });
+
+      if (requestId !== this._traceRequestId) {
+        return;
+      }
+
+      this._traceProjection = {
+        status: "available",
+        ...projectTrace(rawTrace, reference),
+      };
+    } catch (error) {
+      if (requestId !== this._traceRequestId) {
+        return;
+      }
+
+      this._traceError =
+        error && error.message
+          ? String(error.message)
+          : "Home Assistant trace data is unavailable";
+    } finally {
+      if (requestId === this._traceRequestId) {
+        this._traceLoading = false;
+        this._render();
+      }
+    }
+  }
+
   _closeExplanation() {
     this._explainRequestId += 1;
+    this._traceRequestId += 1;
     this._selectedEventId = null;
     this._explanation = null;
     this._explainError = null;
     this._explainLoading = false;
+    this._traceProjection = null;
+    this._traceLoading = false;
+    this._traceError = null;
     this._render();
   }
 
@@ -866,7 +945,142 @@ class HAForensicLabPanel extends HTMLElement {
       '<div class="explain-chain">' +
       chain +
       "</div>" +
+      this._traceView() +
       "</section>"
+    );
+  }
+
+
+  _traceView() {
+    if (this._traceLoading) {
+      return (
+        '<section class="trace-panel">' +
+        '<div class="trace-head"><div><span class="section-kicker">Home Assistant trace</span><h3>Execution trace</h3></div>' +
+        '<span class="trace-badge">Live only</span></div>' +
+        '<div class="trace-state"><div class="spinner" aria-hidden="true"></div><div><strong>Resolving stored trace…</strong><p>Matching the reconstructed Home Assistant context to a retained automation or script run.</p></div></div>' +
+        "</section>"
+      );
+    }
+
+    if (this._traceError) {
+      return (
+        '<section class="trace-panel">' +
+        '<div class="trace-head"><div><span class="section-kicker">Home Assistant trace</span><h3>Execution trace</h3></div>' +
+        '<span class="trace-badge muted-badge">Unavailable</span></div>' +
+        '<div class="trace-state"><div><strong>Trace could not be read.</strong><p>' +
+        this._escape(this._traceError) +
+        "</p><p>Home Assistant retains a limited number of traces per automation or script, so older runs may already be gone.</p></div></div>" +
+        "</section>"
+      );
+    }
+
+    if (!this._traceProjection) {
+      return "";
+    }
+
+    if (this._traceProjection.status !== "available") {
+      return (
+        '<section class="trace-panel">' +
+        '<div class="trace-head"><div><span class="section-kicker">Home Assistant trace</span><h3>Execution trace</h3></div>' +
+        '<span class="trace-badge muted-badge">No retained trace</span></div>' +
+        '<div class="trace-state"><div><strong>No matching stored run.</strong><p>' +
+        this._escape(this._traceProjection.reason || "Trace unavailable") +
+        "</p><p>The forensic context chain remains valid; this only means Home Assistant no longer has the richer execution trace for this run.</p></div></div>" +
+        "</section>"
+      );
+    }
+
+    const trace = this._traceProjection;
+    const reference = trace.reference || {};
+    const identity =
+      reference.domain && reference.item_id
+        ? reference.domain + "." + reference.item_id
+        : "automation/script";
+    const facts = [
+      ["Run", reference.run_id],
+      ["State", trace.state],
+      ["Execution", trace.script_execution],
+      ["Last step", trace.last_step],
+    ].filter(([, value]) => value);
+
+    const factView = facts.length
+      ? '<div class="trace-facts">' +
+        facts
+          .map(
+            ([label, value]) =>
+              '<div class="trace-fact"><span>' +
+              this._escape(label) +
+              "</span>" +
+              this._code(value) +
+              "</div>"
+          )
+          .join("") +
+        "</div>"
+      : "";
+
+    const steps = Array.isArray(trace.steps) ? trace.steps : [];
+    const stepView = steps.length
+      ? '<div class="trace-steps">' +
+        steps.map((step, index) => this._traceStepView(step, index)).join("") +
+        "</div>"
+      : '<div class="trace-state"><div><strong>No projected steps.</strong><p>The trace exists, but it did not expose any safe structural steps.</p></div></div>';
+
+    const truncation = trace.truncated
+      ? '<div class="trace-warning">Only the first ' +
+        this._escape(steps.length) +
+        " safe trace steps are shown.</div>"
+      : "";
+
+    return (
+      '<section class="trace-panel">' +
+      '<div class="trace-head"><div><span class="section-kicker">Home Assistant trace</span><h3>Execution trace</h3><div class="trace-identity">' +
+      this._code(identity) +
+      "</div></div>" +
+      '<span class="trace-badge">Projected safely</span></div>' +
+      factView +
+      truncation +
+      stepView +
+      '<div class="trace-privacy"><strong>Privacy boundary</strong><span>HA Forensic Lab keeps only paths, safe branch outcomes and child-trace references in panel memory. Config, blueprint inputs, changed variables, error/template text and arbitrary result payloads are discarded and are not written to the Forensic Lab stores.</span></div>' +
+      "</section>"
+    );
+  }
+
+  _traceStepView(step, index) {
+    const outcome = [];
+
+    if (typeof step.result === "boolean") {
+      outcome.push(
+        '<span class="trace-outcome">' +
+          (step.result ? "condition: true" : "condition: false") +
+          "</span>"
+      );
+    }
+
+    if (step.choice) {
+      outcome.push(
+        '<span class="trace-outcome">branch: ' +
+          this._escape(step.choice) +
+          "</span>"
+      );
+    }
+
+    const child = step.child
+      ? '<div class="trace-child"><span>child trace</span>' +
+        this._code(step.child.domain + "." + step.child.item_id) +
+        "</div>"
+      : "";
+
+    return (
+      '<div class="trace-step"><span class="trace-index">' +
+      this._escape(index + 1) +
+      '</span><div class="trace-step-body"><div class="trace-path">' +
+      this._code(step.path) +
+      "</div>" +
+      (outcome.length
+        ? '<div class="trace-outcomes">' + outcome.join("") + "</div>"
+        : "") +
+      child +
+      "</div></div>"
     );
   }
 
@@ -1186,9 +1400,10 @@ class HAForensicLabPanel extends HTMLElement {
       ".explain-head{display:flex;justify-content:space-between;gap:18px;align-items:flex-start}.explain-head h2{margin:4px 0 8px;font-size:1.35rem}.explain-target{display:flex;gap:9px;align-items:center;flex-wrap:wrap}.explain-transition{display:flex;gap:7px;align-items:center}.explain-head-actions{display:flex;gap:8px;align-items:center}.icon-button{width:36px;height:36px;border:1px solid var(--divider-color);border-radius:10px;color:var(--primary-text-color);background:var(--primary-background-color);font-size:1.35rem;line-height:1;cursor:pointer}.evidence-status{padding:5px 8px;border-radius:999px;font-size:.72rem;font-weight:750}.evidence-status.complete{background:var(--success-color,#4caf50);color:var(--text-primary-color,#fff)}.evidence-status.incomplete{background:var(--warning-color,#ff9800);color:var(--text-primary-color,#fff)}" +
       ".evidence-note{margin:16px 0;padding:13px 14px;border-left:3px solid var(--primary-color);border-radius:8px;background:var(--secondary-background-color)}.evidence-note strong{font-size:.84rem}.evidence-note p{margin:4px 0 0;color:var(--secondary-text-color);font-size:.82rem;line-height:1.5}.evidence-gaps{display:grid;gap:7px;margin:14px 0;padding:12px 14px;border:1px solid var(--divider-color);border-radius:10px}.gap-title{font-size:.78rem;font-weight:750;text-transform:uppercase;letter-spacing:.05em;color:var(--secondary-text-color)}.gap-row{display:grid;grid-template-columns:20px 1fr;gap:7px;align-items:start;font-size:.82rem;line-height:1.45}.gap-marker{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--warning-color,#ff9800);color:var(--text-primary-color,#fff);font-weight:800;font-size:.7rem}" +
       ".chain-heading{margin:20px 0 10px}.chain-heading h3{margin:3px 0 0;font-size:1rem}.explain-chain{display:grid;max-width:900px}.chain-node{padding:13px 14px;border:1px solid var(--divider-color);border-radius:12px;background:var(--primary-background-color)}.chain-node.target{border-color:var(--primary-color);box-shadow:0 0 0 1px var(--primary-color)}.chain-node-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.chain-node-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;color:var(--secondary-text-color);font-size:.75rem}.target-label{padding:3px 6px;border-radius:6px;background:var(--primary-color);color:var(--text-primary-color,#fff);font-weight:700}.evidence-connector{display:grid;grid-template-columns:18px 1fr;gap:9px;min-height:46px;align-items:center;padding:3px 10px;color:var(--secondary-text-color)}.connector-line{justify-self:center;width:2px;height:100%;min-height:34px;background:var(--divider-color)}.evidence-connector.parent .connector-line{background:var(--primary-color)}.evidence-connector strong{display:block;color:var(--primary-text-color);font-size:.78rem}.evidence-connector span:not(.connector-line){display:block;margin-top:2px;font-size:.74rem;line-height:1.35}.explain-loading,.explain-error{display:flex;gap:12px;align-items:center;margin-top:16px;padding:20px;border:1px dashed var(--divider-color);border-radius:12px}.explain-loading p,.explain-error p{margin:3px 0 0;color:var(--secondary-text-color);font-size:.82rem}" +
+      ".trace-panel{margin-top:22px;padding-top:18px;border-top:1px solid var(--divider-color)}.trace-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.trace-head h3{margin:4px 0 5px;font-size:1rem}.trace-identity{margin-top:5px}.trace-badge{padding:5px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:.7rem;font-weight:750;white-space:nowrap}.muted-badge{color:var(--secondary-text-color)}.trace-state{display:flex;gap:12px;align-items:center;margin-top:12px;padding:14px;border:1px dashed var(--divider-color);border-radius:11px}.trace-state p{margin:3px 0 0;color:var(--secondary-text-color);font-size:.8rem;line-height:1.45}.trace-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:12px}.trace-fact{display:grid;grid-template-columns:80px minmax(0,1fr);gap:8px;align-items:baseline;padding:8px 10px;border-radius:9px;background:var(--secondary-background-color);font-size:.75rem}.trace-fact>span{color:var(--secondary-text-color)}.trace-steps{display:grid;gap:7px;margin-top:13px}.trace-step{display:grid;grid-template-columns:26px minmax(0,1fr);gap:9px;align-items:start;padding:10px 11px;border:1px solid var(--divider-color);border-radius:10px;background:var(--primary-background-color)}.trace-index{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.68rem;font-weight:750}.trace-step-body{min-width:0}.trace-path{line-height:1.35}.trace-outcomes{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.trace-outcome{padding:3px 6px;border-radius:6px;background:var(--secondary-background-color);font-size:.68rem;color:var(--secondary-text-color)}.trace-child{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:7px;color:var(--secondary-text-color);font-size:.7rem}.trace-warning{margin-top:11px;padding:8px 10px;border-left:3px solid var(--warning-color,#ff9800);background:var(--secondary-background-color);font-size:.76rem}.trace-privacy{display:grid;gap:3px;margin-top:12px;padding:10px 11px;border-radius:9px;background:var(--secondary-background-color);font-size:.72rem;line-height:1.45}.trace-privacy span{color:var(--secondary-text-color)}" +
       ".state-card{display:grid;justify-items:center;gap:8px;padding:48px 24px;border:1px dashed var(--divider-color);border-radius:16px;text-align:center;background:var(--card-background-color)}.state-card p{max-width:580px;margin:0;color:var(--secondary-text-color);line-height:1.5}.error-card{border-style:solid}.spinner{width:24px;height:24px;border:3px solid var(--divider-color);border-top-color:var(--primary-color);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}" +
       "footer{margin-top:30px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.5}" +
-      "@media(max-width:820px){main{padding:24px 16px 48px}.hero{display:grid}.status{width:max-content}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}form{grid-template-columns:1fr}.actions{flex-wrap:wrap}.event{grid-template-columns:20px minmax(0,1fr)}.event-head,.chain-node-head{display:grid;gap:7px}.time{order:-1}.metadata-row{grid-template-columns:1fr;gap:2px}.explain-head{display:grid}.explain-head-actions{justify-content:space-between;order:-1}.evidence-status{order:2}.incident-card{display:grid}.incident-actions{flex-wrap:wrap}.incident-heading{align-items:flex-start}.incident-heading-actions{flex-wrap:wrap}}" +
+      "@media(max-width:820px){main{padding:24px 16px 48px}.hero{display:grid}.status{width:max-content}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}form{grid-template-columns:1fr}.actions{flex-wrap:wrap}.event{grid-template-columns:20px minmax(0,1fr)}.event-head,.chain-node-head{display:grid;gap:7px}.time{order:-1}.metadata-row{grid-template-columns:1fr;gap:2px}.explain-head{display:grid}.explain-head-actions{justify-content:space-between;order:-1}.evidence-status{order:2}.incident-card{display:grid}.incident-actions{flex-wrap:wrap}.incident-heading{align-items:flex-start}.incident-heading-actions{flex-wrap:wrap}.trace-head{display:grid}.trace-facts{grid-template-columns:1fr}.trace-fact{grid-template-columns:70px minmax(0,1fr)}}" +
       "</style>"
     );
   }
