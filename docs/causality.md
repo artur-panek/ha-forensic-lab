@@ -81,4 +81,9 @@ accepts an event ID from the current timeline buffer and returns:
 - typed evidence edges
 - explicit evidence gaps
 
-The panel uses this response for **Explain this change**.
+The panel uses this response when an event row is selected. `complete` means
+there are no reconstruction gaps; it does not mean the cause is known. A
+single-event context therefore shows **Cause not captured**. Shared-context
+events remain **Related events, cause unproven**, while explicit parent links
+show **Linked activity found**. Missing evidence takes precedence in the summary.
+Live inspection and saved-incident review use the same wording.

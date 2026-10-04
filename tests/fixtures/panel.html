@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Forensic panel browser fixture</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --primary-background-color: #101215;
+    --secondary-background-color: #202329;
+    --card-background-color: #181b20;
+    --primary-text-color: #edf0f4;
+    --secondary-text-color: #abb3c0;
+    --divider-color: #363d47;
+    --primary-color: #ffb938;
+    --text-primary-color: #15191f;
+  }
+  :root.light {
+    color-scheme: light;
+    --primary-background-color: #f5f6f8;
+    --secondary-background-color: #edf0f4;
+    --card-background-color: #fff;
+    --primary-text-color: #192230;
+    --secondary-text-color: #505d6e;
+    --divider-color: #ccd2dc;
+    --primary-color: #1766ad;
+    --text-primary-color: #fff;
+  }
+  body { margin:0; background:var(--primary-background-color); }
+</style>
+<ha-forensic-lab-panel></ha-forensic-lab-panel>
+<script type="module">
+  import "/custom_components/ha_forensic_lab/frontend/ha-forensic-lab-panel.js";
+  const now = 1791152000;
+  const event = (event_id, entity_id, timestamp, kind = "state_changed") => ({
+    event_id, entity_id, timestamp, kind, context_id: "fixture-context",
+    parent_context_id: null, user_id: null, old_state: "off", new_state: "on",
+  });
+  const target = event("target", "light.hallway", now);
+  const isolated = { ...event("isolated", "binary_sensor.panel_dark_mode", now - 1), old_state: "unknown", new_state: "off" };
+  const service = { ...event("service", null, now - 2, "call_service"), domain: "light", service: "turn_on", target_entity_ids: ["light.hallway"] };
+  const automation = { ...event("automation", "automation.hallway_motion", now - 3, "automation_triggered"), name: "Hallway motion lights", source: "state" };
+  const events = [target, isolated, service, automation, ...Array.from({ length: 56 }, (_, i) =>
+    event("older-" + i, "sensor.room_temperature_" + i, now - 4 - i)
+  )];
+  const linked = {
+    target_event_id: "target", complete: true, gaps: [], events: [automation, service, target],
+    edges: [
+      { source_event_id: "automation", target_event_id: "service", evidence_type: "parent_context" },
+      { source_event_id: "service", target_event_id: "target", evidence_type: "same_context_sequence" },
+    ],
+  };
+  const states = Object.fromEntries(events.filter((e) => e.entity_id).map((e) => [e.entity_id, {
+    entity_id: e.entity_id, attributes: { friendly_name: e.entity_id === "light.hallway" ? "Hallway lights" : e.entity_id === "binary_sensor.panel_dark_mode" ? "Panel dark mode" : e.entity_id.replaceAll("_", " ") },
+  }]));
+  const incidents = [];
+  window.requests = [];
+  window.failNextSave = false;
+  window.traceDelay = 0;
+  window.panel = document.querySelector("ha-forensic-lab-panel");
+  window.panel.hass = {
+    states,
+    async callWS(request) {
+      window.requests.push(request);
+      switch (request.type) {
+        case "ha_forensic_lab/timeline":
+          return { events: events.filter((e) => (!request.entity_id || e.entity_id === request.entity_id) && (!request.kind || e.kind === request.kind)), buffer_size: 2048, buffer_capacity: 2048, retained_span_seconds: 17 };
+        case "ha_forensic_lab/explain":
+          return request.event_id === "target" ? linked : { target_event_id: request.event_id, complete: true, events: [events.find((e) => e.event_id === request.event_id)], edges: [], gaps: [] };
+        case "trace/contexts":
+          if (window.traceDelay) await new Promise((resolve) => setTimeout(resolve, window.traceDelay));
+          return {};
+        case "ha_forensic_lab/incidents/list":
+          return [...incidents];
+        case "ha_forensic_lab/incidents/preview": {
+          const count = request.before_seconds > 30 ? 1585 : 401;
+          return { event_count: count, max_events: 500, can_save: count <= 500 };
+        }
+        case "ha_forensic_lab/incidents/create": {
+          if (window.failNextSave) {
+            window.failNextSave = false;
+            throw new Error("incident contains 501 events; limit is 500");
+          }
+          const saved = { incident_id: "saved", title: request.title || "Saved hallway change", event_count: 401, target_event_id: request.target_event_id, window_start: now - request.before_seconds, window_end: now + request.after_seconds, created_at: now, has_trace_evidence: false };
+          incidents.push(saved);
+          return saved;
+        }
+        case "ha_forensic_lab/incidents/review":
+          return { incident: incidents[0], explanation: linked, trace_evidence: null };
+        case "ha_forensic_lab/diagnostics":
+          return { capture: { retained_events: 2401, evicted_events: 353, dropped_unchanged_state: 640, handler_average_ms: .025, handler_max_ms: .07 }, rolling_buffer: { utilization_percent: 100 }, persistence: { completed_writes: 5, failed_writes: 0, pending_save: false } };
+        default:
+          throw new Error("Unexpected fixture request: " + request.type);
+      }
+    },
+  };
+</script>
+</html>

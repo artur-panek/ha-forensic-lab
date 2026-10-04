@@ -1,4 +1,5 @@
 import { PANEL_STYLES } from "./panel-styles.mjs";
+import { summarizeEvidence } from "./evidence-summary.mjs";
 import { projectTrace, resolveTraceReference } from "./trace-projection.mjs";
 
 class HAForensicLabPanel extends HTMLElement {
@@ -16,6 +17,11 @@ class HAForensicLabPanel extends HTMLElement {
       entityId: "",
       kind: "",
     };
+    this._filterDraft = { ...this._filters };
+    this._activeView = "timeline";
+    this._timelineUpdatedAt = null;
+    this._diagnosticsUpdatedAt = null;
+    this._viewScroll = {};
     this._loading = false;
     this._hasLoaded = false;
     this._error = null;
@@ -58,13 +64,6 @@ class HAForensicLabPanel extends HTMLElement {
     if (this._hass && !this._incidentsLoaded && !this._incidentsLoading) {
       void this._loadIncidents();
     }
-    if (
-      this._hass &&
-      !this._diagnosticsLoaded &&
-      !this._diagnosticsLoading
-    ) {
-      void this._loadDiagnostics();
-    }
   }
 
   set hass(value) {
@@ -82,9 +81,6 @@ class HAForensicLabPanel extends HTMLElement {
     }
     if (!this._incidentsLoaded && !this._incidentsLoading) {
       void this._loadIncidents();
-    }
-    if (!this._diagnosticsLoaded && !this._diagnosticsLoading) {
-      void this._loadDiagnostics();
     }
   }
 
@@ -124,6 +120,7 @@ class HAForensicLabPanel extends HTMLElement {
         retained_span_seconds: data.retained_span_seconds ?? null,
       };
       this._hasLoaded = true;
+      this._timelineUpdatedAt = Date.now() / 1000;
     } catch (error) {
       if (requestId !== this._requestId) {
         return;
@@ -154,6 +151,7 @@ class HAForensicLabPanel extends HTMLElement {
         type: "ha_forensic_lab/diagnostics",
       });
       this._diagnosticsLoaded = true;
+      this._diagnosticsUpdatedAt = Date.now() / 1000;
     } catch (error) {
       this._diagnosticsError =
         error && error.message
@@ -220,6 +218,7 @@ class HAForensicLabPanel extends HTMLElement {
       return;
     }
 
+    this._activeView = "timeline";
     const target =
       (this._data.events || []).find((event) => event.event_id === eventId) ||
       (this._explanation?.events || []).find((event) => event.event_id === eventId);
@@ -384,6 +383,7 @@ class HAForensicLabPanel extends HTMLElement {
         ".";
       saved = true;
       this._incidentDraft = null;
+      this._activeView = "incidents";
     } catch (error) {
       draft.preview = null;
       draft.error =
@@ -548,16 +548,28 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   async _loadExplanation(eventId) {
-    if (!this._hass || !eventId || this._explainLoading) {
+    if (!this._hass || !eventId) {
       return;
     }
 
     const requestId = ++this._explainRequestId;
+    this._activeView = "timeline";
+    this._traceRequestId += 1;
+    this._traceProjection = null;
+    this._traceError = null;
+    this._traceLoading = false;
     this._selectedEventId = eventId;
     this._explanation = null;
     this._explainError = null;
     this._explainLoading = true;
     this._render();
+    const inspector = this.shadowRoot.getElementById("investigation-detail");
+    if (inspector) {
+      inspector.scrollTop = 0;
+      if (globalThis.matchMedia?.("(max-width: 1000px)").matches) {
+        inspector.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
 
     try {
       const data = await this._hass.callWS({
@@ -585,12 +597,6 @@ class HAForensicLabPanel extends HTMLElement {
       if (requestId === this._explainRequestId) {
         this._explainLoading = false;
         this._render();
-
-        const explanationPanel =
-          this.shadowRoot && this.shadowRoot.getElementById("explanation-panel");
-        if (explanationPanel) {
-          explanationPanel.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
       }
     }
   }
@@ -664,6 +670,7 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   _closeExplanation() {
+    const eventId = this._selectedEventId;
     this._explainRequestId += 1;
     this._traceRequestId += 1;
     this._selectedEventId = null;
@@ -674,6 +681,11 @@ class HAForensicLabPanel extends HTMLElement {
     this._traceLoading = false;
     this._traceError = null;
     this._render();
+    const row = this.shadowRoot.getElementById("event-" + eventId);
+    row?.focus({ preventScroll: true });
+    if (globalThis.matchMedia?.("(max-width: 1000px)").matches) {
+      row?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
   }
 
   _render() {
@@ -681,40 +693,83 @@ class HAForensicLabPanel extends HTMLElement {
       return;
     }
 
-    const events = this._data.events || [];
-    const status = this._statusView();
-    const content = this._contentView(events);
-    const explanation = this._explanationView();
-    const incidents = this._incidentsView();
-    const savedReview = this._savedIncidentReviewView();
-    const recorderHealth = this._recorderHealthView();
+    const focused = this.shadowRoot.activeElement;
+    const focusId = focused?.id;
+    const selection = focused?.selectionStart == null
+      ? null : [focused.selectionStart, focused.selectionEnd];
+    for (const node of this.shadowRoot.querySelectorAll("[data-preserve-scroll]")) {
+      this._viewScroll[node.id] = node.scrollTop;
+    }
+    const openDetails = new Set(
+      Array.from(this.shadowRoot.querySelectorAll("details[id][open]"), (node) => node.id)
+    );
+    let content;
+    if (this._activeView === "incidents") {
+      content = this._incidentsView() + this._savedIncidentReviewView();
+    } else if (this._activeView === "diagnostics") {
+      content = this._recorderHealthView();
+    } else {
+      const events = this._data.events || [];
+      const emptyInspector = '<section class="inspector-empty"><span class="section-kicker">Investigate a change</span><h2>Select an event</h2><p>Choose a row to see what changed, which activity is linked, and where evidence is missing.</p><p>You can then save the evidence before it leaves the rolling buffer.</p></section>';
+      content = this._statsView(events.length) + this._filtersView() +
+        '<div class="investigation-layout"><div class="event-browser">' +
+        this._contentView(events) + '</div>' +
+        '<aside id="investigation-detail" class="investigation-detail" data-preserve-scroll aria-label="Selected event">' +
+        this._incidentDraftView() + (this._explanationView() || emptyInspector) +
+        '</aside></div>';
+    }
 
     this.shadowRoot.innerHTML =
       PANEL_STYLES +
       '<main>' +
       '<header class="hero">' +
       '<div>' +
-      '<div class="eyebrow">Runtime forensics for Home Assistant</div>' +
       '<h1>HA Forensic Lab</h1>' +
-      '<p class="lead">Inspect the runtime evidence around state changes, service calls, automations and scripts.</p>' +
       '</div>' +
-      status +
+      (this._activeView === "timeline" ? this._statusView() : "") +
       '</header>' +
-      this._statsView(events.length) +
-      recorderHealth +
-      this._filtersView() +
-      incidents +
-      savedReview +
-      explanation +
+      this._navigationView() +
       content +
-      '<footer>Raw event payloads and complete service data are not retained.</footer>' +
       '</main>';
 
     this._bindControls();
+    for (const node of this.shadowRoot.querySelectorAll("[data-preserve-scroll]")) {
+      node.scrollTop = this._viewScroll[node.id] || 0;
+    }
+    for (const id of openDetails) {
+      const node = this.shadowRoot.getElementById(id);
+      if (node) node.open = true;
+    }
+    if (focusId) {
+      const input = this.shadowRoot.getElementById(focusId);
+      if (input && !input.disabled) {
+        input.focus({ preventScroll: true });
+        if (selection) input.setSelectionRange(...selection);
+      }
+    }
+  }
+
+  _navigationView() {
+    return '<nav class="workspace-nav" aria-label="Forensic views">' + [
+      ["timeline", "Timeline"],
+      ["incidents", "Saved incidents" + (this._incidentsLoaded ? ` (${this._incidents.length})` : "")],
+      ["diagnostics", "Recorder"],
+    ].map(([view, label]) =>
+      `<button id="view-${view}" type="button" class="view-button" data-view="${view}" aria-pressed="${view === this._activeView}">${label}</button>`
+    ).join("") + '</nav>';
+  }
+
+  _setView(view) {
+    if (!["timeline", "incidents", "diagnostics"].includes(view)) return;
+    this._activeView = view;
+    this._render();
+    if (view === "diagnostics") void this._loadDiagnostics();
+    if (view === "incidents") void this._loadIncidents();
   }
 
   _statusView() {
-    let label = "Capture active";
+    let label = this._timelineUpdatedAt
+      ? "Snapshot · " + this._formatTime(this._timelineUpdatedAt, false) : "Snapshot";
     let state = "ok";
 
     if (this._loading) {
@@ -741,26 +796,25 @@ class HAForensicLabPanel extends HTMLElement {
     const size = this._data.buffer_size || 0;
     const capacity = this._data.buffer_capacity || 0;
     const full = capacity > 0 && size >= capacity;
+    const span = this._data.retained_span_seconds;
+    const shortHistory = full && Number.isFinite(span) && span < 60;
 
     return (
-      '<section class="stats" aria-label="Capture status">' +
+      '<section class="stats" aria-label="Timeline snapshot">' +
       '<div class="stat"><span class="stat-value">' +
-      this._escape(size) +
-      '</span><span class="stat-label">Events buffered</span></div>' +
-      '<div class="stat"><span class="stat-value">' +
-      this._escape(capacity || "—") +
-      '</span><span class="stat-label">Buffer capacity</span></div>' +
+      this._escape(size + " / " + (capacity || "—")) +
+      '</span><span class="stat-label">Stored events</span></div>' +
       '<div class="stat"><span class="stat-value">' +
       this._escape(size ? this._formatSpan(this._data.retained_span_seconds) : "—") +
-      '</span><span class="stat-label">Retained span</span></div>' +
+      '</span><span class="stat-label">History available</span></div>' +
       '<div class="stat"><span class="stat-value">' +
       this._escape(returnedCount) +
       '</span><span class="stat-label">Events shown</span></div>' +
-      '</section><p class="buffer-note">' +
-      (full
-        ? "Rolling buffer full: new events replace the oldest. "
-        : "The rolling buffer keeps the latest events. ") +
-      'Timeline filters only change this view. <a href="/config/integrations/integration/ha_forensic_lab">Capture settings</a></p>'
+      '</section><p class="buffer-note' + (shortHistory ? ' short-history' : '') + '">' +
+      (shortHistory
+        ? '<strong>Only ' + this._escape(this._formatSpan(span)) + ' of history remains.</strong> Exclude noisy entities or increase capacity in capture settings. '
+        : full ? 'Buffer full: new events replace the oldest. ' : 'Oldest events are replaced when the buffer fills. ') +
+      '<a href="/config/integrations/integration/ha_forensic_lab">Capture settings</a></p>'
     );
   }
 
@@ -821,12 +875,13 @@ class HAForensicLabPanel extends HTMLElement {
 
     return (
       '<section class="health-panel">' +
-      '<div class="section-heading health-heading"><div><span class="section-kicker">Recorder health</span><h2>Runtime overhead</h2></div>' +
+      '<div class="section-heading health-heading"><div><h2>Recorder health</h2><p class="view-description">Technical counters since the last integration start. Restored events are not new captures.</p></div>' +
       '<button class="button button-small" id="refresh-diagnostics" type="button"' +
       (this._diagnosticsLoading ? " disabled" : "") +
       ">" +
       (this._diagnosticsLoading ? "Refreshing…" : "Refresh") +
       "</button></div>" +
+      '<p class="view-description">Snapshot taken ' + this._escape(this._diagnosticsUpdatedAt ? this._formatTime(this._diagnosticsUpdatedAt, false) : "—") + '. Refresh to update these counters.</p>' +
       '<div class="health-grid">' +
       this._healthMetric(
         this._formatMetric(capture.handler_average_ms, 3) + " ms",
@@ -844,7 +899,7 @@ class HAForensicLabPanel extends HTMLElement {
       ) +
       this._healthMetric(
         this._formatMetric(rolling.utilization_percent, 1) + "%",
-        "Rolling buffer used"
+        "Buffer used at this snapshot"
       ) +
       "</div>" +
       '<div class="health-foot"><span>Persistence: <strong>' +
@@ -895,7 +950,7 @@ class HAForensicLabPanel extends HTMLElement {
           '<option value="' +
           this._escape(value) +
           '"' +
-          (this._filters.kind === value ? " selected" : "") +
+          (this._filterDraft.kind === value ? " selected" : "") +
           ">" +
           this._escape(label) +
           "</option>"
@@ -905,9 +960,13 @@ class HAForensicLabPanel extends HTMLElement {
     return (
       '<section class="toolbar">' +
       '<form id="timeline-filters">' +
-      '<label class="field"><span>Entity</span><input id="entity-filter" type="text" autocomplete="off" spellcheck="false" placeholder="light.hallway" value="' +
-      this._escape(this._filters.entityId) +
-      '"></label>' +
+      '<label class="field"><span>Entity ID</span><input id="entity-filter" type="text" list="entity-options" autocomplete="off" spellcheck="false" placeholder="All entities — choose or enter an ID" value="' +
+      this._escape(this._filterDraft.entityId) +
+      '"></label><datalist id="entity-options">' +
+      Object.values(this._hass?.states || {}).map((state) =>
+        '<option value="' + this._escape(state.entity_id) + '" label="' +
+        this._escape(state.attributes?.friendly_name || state.entity_id) + '"></option>'
+      ).join("") + '</datalist>' +
       '<label class="field"><span>Event type</span><select id="kind-filter">' +
       options +
       "</select></label>" +
@@ -917,14 +976,38 @@ class HAForensicLabPanel extends HTMLElement {
       ">Apply</button>" +
       '<button class="button" id="refresh-timeline" type="button"' +
       (this._loading ? " disabled" : "") +
-      ">Refresh</button>" +
+      ">Refresh events</button>" +
       '<button class="button quiet" id="clear-filters" type="button"' +
       (this._loading ? " disabled" : "") +
       ">Clear</button>" +
       "</div>" +
       "</form>" +
+      '<p id="filter-status" class="filter-status" role="status">' + this._escape(this._filterStatusText()) + '</p>' +
       "</section>"
     );
+  }
+
+  _filterStatusText() {
+    if (this._filterDraft.entityId.trim() !== this._filters.entityId ||
+        this._filterDraft.kind !== this._filters.kind) {
+      return "Filters changed — press Apply to update the list.";
+    }
+    const selected = [this._filters.entityId, this._filters.kind ? this._kindLabel(this._filters.kind) : ""].filter(Boolean);
+    return (selected.length ? "Showing " + selected.join(" · ") : "Showing all entities and event types") +
+      ". Manual refresh; filters affect this view only, not capture.";
+  }
+
+  _updateFilterDraft(field, value) {
+    this._filterDraft[field] = value;
+    const status = this.shadowRoot.getElementById("filter-status");
+    if (status) status.textContent = this._filterStatusText();
+  }
+
+  async _applyFilters() {
+    if (this._loading) return;
+    this._filters = { entityId: this._filterDraft.entityId.trim(), kind: this._filterDraft.kind };
+    this._filterDraft = { ...this._filters };
+    await this._loadTimeline();
   }
 
   _contentView(events) {
@@ -968,10 +1051,10 @@ class HAForensicLabPanel extends HTMLElement {
 
     return (
       '<section class="timeline-section">' +
-      '<div class="section-heading"><div><span class="section-kicker">Newest first</span><h2>Runtime timeline</h2></div>' +
-      (this._loading ? '<span class="refresh-note">Refreshing…</span>' : "") +
+      '<div class="section-heading"><div><h2>Events <span class="list-count">' + this._escape(events.length) + '</span></h2></div>' +
+      '<span class="refresh-note">' + (this._loading ? 'Refreshing…' : 'Newest first') + '</span>' +
       "</div>" +
-      '<div class="timeline">' +
+      '<div class="timeline" id="timeline-list" data-preserve-scroll>' +
       events.map((event) => this._eventView(event)).join("") +
       "</div>" +
       "</section>"
@@ -979,94 +1062,29 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   _eventView(event) {
-    const kind = String(event.kind || "unknown");
-    const title = this._eventTitle(event);
     const summary = this._eventSummary(event);
-    const timestamp = this._formatTime(event.timestamp);
-    const dateTime = this._formatDateTime(event.timestamp);
-    const metadata = this._metadataView(event, dateTime);
     const selected = event.event_id === this._selectedEventId;
-    const explainAction =
-      event.kind === "state_changed"
-        ? '<div class="event-actions">' +
-          '<button class="button button-small explain-button" type="button" data-explain-id="' +
-          this._escape(event.event_id) +
-          '"' +
-          (this._explainLoading && selected ? " disabled" : "") +
-          ">" +
-          (this._explainLoading && selected
-            ? "Reconstructing…"
-            : "Explain this change") +
-          "</button>" +
-          '<button class="button button-small save-incident-button" type="button" data-save-event-id="' +
-          this._escape(event.event_id) +
-          '"' +
-          (this._savingEventId === event.event_id ||
-          (selected && this._traceLoading)
-            ? " disabled"
-            : "") +
-          ">" +
-          (this._savingEventId === event.event_id
-            ? "Saving…"
-            : selected && this._traceLoading
-              ? "Trace loading…"
-              : "Save incident") +
-          "</button></div>"
-        : "";
-
-    return (
-      '<article class="event">' +
-      '<div class="rail" aria-hidden="true"><span class="marker ' +
-      this._escape(kind) +
-      '"></span></div>' +
-      '<div class="event-card' +
-      (selected ? " selected" : "") +
-      '">' +
-      '<div class="event-head">' +
-      '<div class="event-heading">' +
-      '<span class="kind">' +
-      this._escape(this._kindLabel(kind)) +
-      "</span>" +
-      '<strong class="event-title">' +
-      title +
-      "</strong>" +
-      "</div>" +
-      '<time class="time" title="' +
-      this._escape(dateTime) +
-      '">' +
-      this._escape(timestamp) +
-      "</time>" +
-      "</div>" +
-      (summary ? '<div class="event-summary">' + summary + "</div>" : "") +
-      explainAction +
-      metadata +
-      "</div>" +
-      "</article>"
-    );
+    return `<button id="event-${this._escape(event.event_id)}" class="event-row explain-button${selected ? " selected" : ""}" type="button"
+      data-explain-id="${this._escape(event.event_id)}" aria-pressed="${selected}">
+      <span class="event-row-top"><span class="kind">${this._escape(this._kindLabel(event.kind))}</span>
+      <time class="time" title="${this._escape(this._formatDateTime(event.timestamp))}">${this._escape(this._formatTime(event.timestamp))}</time></span>
+      <strong class="event-row-name">${this._eventTitle(event)}</strong>
+      ${event.entity_id ? '<span class="entity-id">' + this._escape(event.entity_id) + '</span>' : ''}
+      <span class="event-row-bottom"><span class="event-summary">${summary}</span><span class="inspect-label">${selected ? "Selected" : "Inspect →"}</span></span>
+      </button>`;
   }
 
   _eventTitle(event) {
-    if (event.kind === "state_changed") {
-      return this._code(event.entity_id || "unknown entity");
-    }
+    return this._escape(this._eventName(event));
+  }
 
+  _eventName(event) {
     if (event.kind === "call_service") {
-      const serviceName =
-        event.domain && event.service
-          ? event.domain + "." + event.service
-          : event.service || event.domain || "service call";
-      return this._code(serviceName);
+      return event.domain && event.service
+        ? event.domain + "." + event.service : event.service || "Service call";
     }
-
-    if (event.kind === "automation_triggered") {
-      return this._escape(event.name || event.entity_id || "Automation");
-    }
-
-    if (event.kind === "script_started") {
-      return this._escape(event.name || event.entity_id || "Script");
-    }
-
-    return this._escape(event.entity_id || event.name || "Runtime event");
+    const friendlyName = this._hass?.states?.[event.entity_id]?.attributes?.friendly_name;
+    return event.name || friendlyName || event.entity_id || this._kindLabel(event.kind);
   }
 
   _eventSummary(event) {
@@ -1096,18 +1114,14 @@ class HAForensicLabPanel extends HTMLElement {
     }
 
     if (event.kind === "automation_triggered") {
-      const identity =
-        event.entity_id && event.name
-          ? this._code(event.entity_id) + " "
-          : "";
       const source = event.source
         ? '<span class="muted">Triggered by</span> ' + this._escape(event.source)
         : '<span class="muted">Automation triggered</span>';
-      return identity + source;
+      return source;
     }
 
     if (event.kind === "script_started" && event.entity_id) {
-      return this._code(event.entity_id);
+      return '<span class="muted">Script started</span>';
     }
 
     return "";
@@ -1115,6 +1129,7 @@ class HAForensicLabPanel extends HTMLElement {
 
   _metadataView(event, dateTime) {
     const rows = [
+      ["Entity ID", event.entity_id],
       ["Event ID", event.event_id],
       ["Context", event.context_id],
       ["Parent context", event.parent_context_id],
@@ -1127,8 +1142,8 @@ class HAForensicLabPanel extends HTMLElement {
     }
 
     return (
-      "<details>" +
-      "<summary>Evidence metadata</summary>" +
+      '<details id="metadata-' + this._escape(event.event_id) + '">' +
+      "<summary>Technical details · IDs and context</summary>" +
       '<div class="metadata">' +
       rows
         .map(
@@ -1156,7 +1171,7 @@ class HAForensicLabPanel extends HTMLElement {
     if (this._incidentReviewLoading) {
       return (
         '<section class="saved-review-panel" id="saved-review-panel">' +
-        this._savedReviewHeader(null, null) +
+        this._savedReviewHeader(null) +
         '<div class="trace-state"><div class="spinner" aria-hidden="true"></div>' +
         '<div><strong>Reconstructing frozen evidence…</strong><p>This review uses the saved incident only; it does not depend on the live rolling buffer.</p></div></div>' +
         "</section>"
@@ -1166,7 +1181,7 @@ class HAForensicLabPanel extends HTMLElement {
     if (this._incidentReviewError) {
       return (
         '<section class="saved-review-panel" id="saved-review-panel">' +
-        this._savedReviewHeader(null, null) +
+        this._savedReviewHeader(null) +
         '<div class="trace-state"><div><strong>Could not review this incident.</strong><p>' +
         this._escape(this._incidentReviewError) +
         '</p><button class="button primary" id="retry-incident-review" type="button">Try again</button></div></div>' +
@@ -1212,28 +1227,24 @@ class HAForensicLabPanel extends HTMLElement {
         "</div>"
       : "";
 
-    const status = {
-      className: explanation.complete ? "complete" : "incomplete",
-      label: explanation.complete
-        ? "Frozen context evidence complete"
-        : "Frozen evidence gap",
-    };
-
     return (
       '<section class="saved-review-panel" id="saved-review-panel">' +
-      this._savedReviewHeader(incident, status) +
-      '<div class="evidence-note"><strong>Durable review</strong><p>This causality chain is reconstructed from the incident snapshot, so it remains reviewable after rolling-buffer eviction or a Home Assistant restart.</p></div>' +
+      this._savedReviewHeader(incident) +
+      '<p class="view-description">Reviewing saved evidence. This view does not depend on the current rolling buffer.</p>' +
+      this._evidenceOverviewView(explanation) +
       gapView +
       '<div class="chain-heading"><span class="section-kicker">Frozen · oldest to newest</span><h3>Context evidence chain</h3></div>' +
       '<div class="explain-chain">' +
       chain +
       "</div>" +
-      this._frozenTraceView(review.trace_evidence) +
+      '<details id="frozen-trace-details"><summary>Saved automation / script trace · ' +
+      (review.trace_evidence ? 'available' : 'not captured') + '</summary>' +
+      this._frozenTraceView(review.trace_evidence) + '</details>' +
       "</section>"
     );
   }
 
-  _savedReviewHeader(incident, status) {
+  _savedReviewHeader(incident) {
     const title =
       incident && incident.title ? incident.title : "Saved incident";
     const meta =
@@ -1246,14 +1257,6 @@ class HAForensicLabPanel extends HTMLElement {
             : "") +
           "</div>"
         : "";
-    const statusView = status
-      ? '<span class="evidence-status ' +
-        this._escape(status.className) +
-        '">' +
-        this._escape(status.label) +
-        "</span>"
-      : "";
-
     return (
       '<div class="explain-head"><div><span class="section-kicker">Saved incident review</span><h2>' +
       this._escape(title) +
@@ -1261,7 +1264,6 @@ class HAForensicLabPanel extends HTMLElement {
       meta +
       "</div>" +
       '<div class="explain-head-actions">' +
-      statusView +
       '<button class="icon-button" id="close-incident-review" type="button" aria-label="Close saved incident review" title="Close saved incident review">×</button>' +
       "</div></div>"
     );
@@ -1345,7 +1347,6 @@ class HAForensicLabPanel extends HTMLElement {
       return (
         '<section class="incidents-panel">' +
         '<div class="section-heading"><div><span class="section-kicker">Frozen evidence</span><h2>Saved incidents</h2></div></div>' +
-        this._incidentDraftView() +
         '<div class="incident-empty"><div class="spinner" aria-hidden="true"></div><span>Loading saved incidents…</span></div>' +
         "</section>"
       );
@@ -1355,7 +1356,7 @@ class HAForensicLabPanel extends HTMLElement {
       ? '<div class="incident-list">' +
         incidents.map((incident) => this._incidentCard(incident)).join("") +
         "</div>"
-      : '<div class="incident-empty"><strong>No saved incidents yet.</strong><span>Use Save incident on a state change to freeze evidence before the rolling buffer moves on.</span></div>';
+      : '<div class="incident-empty"><strong>No saved incidents yet.</strong><span>Open Timeline, select an event, then choose Save incident to keep its evidence.</span></div>';
 
     return (
       '<section class="incidents-panel">' +
@@ -1368,7 +1369,6 @@ class HAForensicLabPanel extends HTMLElement {
       ">Refresh</button></div></div>" +
       notice +
       error +
-      this._incidentDraftView() +
       cards +
       '<p class="incident-help">Exports pseudonymize identifiers and redact free text. Review before sharing.</p>' +
       "</section>"
@@ -1482,7 +1482,7 @@ class HAForensicLabPanel extends HTMLElement {
     if (this._explainLoading) {
       return (
         '<section class="explain-panel" id="explanation-panel">' +
-        this._explanationHeader(timelineTarget, null) +
+        this._explanationHeader(timelineTarget) +
         '<div class="explain-loading"><div class="spinner" aria-hidden="true"></div>' +
         '<div><strong>Reconstructing context evidence…</strong>' +
         '<p>Only explicit Home Assistant context relationships are followed.</p></div></div>' +
@@ -1493,7 +1493,7 @@ class HAForensicLabPanel extends HTMLElement {
     if (this._explainError) {
       return (
         '<section class="explain-panel" id="explanation-panel">' +
-        this._explanationHeader(timelineTarget, null) +
+        this._explanationHeader(timelineTarget) +
         '<div class="explain-error"><strong>Could not reconstruct this change.</strong><p>' +
         this._escape(this._explainError) +
         '</p><button class="button primary" id="retry-explanation" type="button">Try again</button></div>' +
@@ -1539,30 +1539,30 @@ class HAForensicLabPanel extends HTMLElement {
         "</div>"
       : "";
 
-    const statusClass = explanation.complete ? "complete" : "incomplete";
-    const statusLabel = explanation.complete
-      ? "Context evidence complete"
-      : "Evidence gap";
-
     return (
       '<section class="explain-panel" id="explanation-panel">' +
-      this._explanationHeader(target, {
-        className: statusClass,
-        label: statusLabel,
-      }) +
-      '<div class="evidence-note"><strong>What “confirmed” means here</strong><p>' +
-      "Parent-context links come from Home Assistant context metadata. Same-context links confirm a shared change context and captured order, not direct event-to-event causation." +
-      "</p></div>" +
+      this._explanationHeader(target) +
+      this._evidenceOverviewView(explanation) +
       gapView +
-      '<div class="chain-heading"><span class="section-kicker">Oldest to newest</span><h3>Context evidence chain</h3></div>' +
+      '<div class="chain-heading"><h3>Recorded sequence</h3><p class="view-description">Oldest first · ' + this._escape(events.length) + ' event(s)</p></div>' +
       '<div class="explain-chain">' +
       chain +
       "</div>" +
-      this._traceView() +
+      '<details id="trace-details-' + this._escape(this._selectedEventId) + '"><summary>Automation / script trace · ' +
+      (this._traceLoading ? 'checking' : this._traceProjection?.status === "available" ? 'available' : 'unavailable') +
+      '</summary>' + this._traceView() + '</details>' +
       "</section>"
     );
   }
 
+  _evidenceOverviewView(explanation) {
+    const summary = summarizeEvidence(explanation);
+    return '<section class="evidence-overview ' + summary.tone + '" aria-label="Evidence summary">' +
+      '<span class="section-kicker">What the recording shows</span><h3>' + this._escape(summary.title) +
+      '</h3><p>' + this._escape(summary.detail) + '</p>' +
+      (summary.anchor ? '<p class="linked-activity"><strong>Related activity:</strong> ' +
+        this._eventTitle(summary.anchor) + '</p>' : '') + '</section>';
+  }
 
   _traceView() {
     if (this._traceLoading) {
@@ -1598,7 +1598,7 @@ class HAForensicLabPanel extends HTMLElement {
         '<span class="trace-badge muted-badge">No retained trace</span></div>' +
         '<div class="trace-state"><div><strong>No matching stored run.</strong><p>' +
         this._escape(this._traceProjection.reason || "Trace unavailable") +
-        "</p><p>The forensic context chain remains valid; this only means Home Assistant no longer has the richer execution trace for this run.</p></div></div>" +
+        "</p><p>No additional run details are available. This does not prove that no automation or script was involved.</p></div></div>" +
         "</section>"
       );
     }
@@ -1697,48 +1697,25 @@ class HAForensicLabPanel extends HTMLElement {
     );
   }
 
-  _explanationHeader(target, status) {
-    const targetIdentity =
-      target && target.entity_id
-        ? this._code(target.entity_id)
-        : "<span>Selected state change</span>";
-    const transition =
-      target && target.kind === "state_changed"
-        ? '<div class="explain-transition"><span class="state-value">' +
-          this._escape(this._nullable(target.old_state)) +
-          '</span><span class="arrow">→</span><span class="state-value">' +
-          this._escape(this._nullable(target.new_state)) +
-          "</span></div>"
-        : "";
-
-    const statusView = status
-      ? '<span class="evidence-status ' +
-        this._escape(status.className) +
-        '">' +
-        this._escape(status.label) +
-        "</span>"
-      : "";
-
-    return (
-      '<div class="explain-head"><div><span class="section-kicker">Deterministic reconstruction</span>' +
-      '<h2>Explain this change</h2><div class="explain-target">' +
-      targetIdentity +
-      transition +
-      "</div></div>" +
-      '<div class="explain-head-actions">' +
-      statusView +
-      '<button class="icon-button" id="close-explanation" type="button" aria-label="Close explanation" title="Close explanation">×</button>' +
-      "</div></div>"
-    );
+  _explanationHeader(target) {
+    const saving = Boolean(this._savingEventId);
+    const disabled = saving || this._traceLoading || this._explainLoading || !this._explanation;
+    return '<div class="explain-head"><div><span class="section-kicker">Selected event' +
+      (target ? ' · ' + this._escape(this._formatTime(target.timestamp)) : '') + '</span><h2>' +
+      (target ? this._eventTitle(target) : 'Event details') + '</h2>' +
+      (target?.entity_id ? '<div class="selected-identity">' + this._code(target.entity_id) + '</div>' : '') +
+      '<div class="event-summary selected-transition">' + (target ? this._eventSummary(target) : '') +
+      '</div></div><button class="icon-button" id="close-explanation" type="button" aria-label="Close explanation" title="Close explanation">×</button></div>' +
+      '<div class="event-actions"><button class="button primary save-incident-button" type="button" data-save-event-id="' +
+      this._escape(this._selectedEventId) + '"' + (disabled ? ' disabled' : '') + '>' +
+      (saving ? 'Saving…' : this._traceLoading ? 'Checking trace…' : 'Save incident') +
+      '</button><span class="action-hint">Keep this evidence after the buffer moves on.</span></div>';
   }
 
   _explanationEventView(event, targetEventId) {
     const isTarget = event.event_id === targetEventId;
     const kind = String(event.kind || "unknown");
     const summary = this._eventSummary(event);
-    const context = event.context_id
-      ? '<span class="chain-context">Context ' + this._code(event.context_id) + "</span>"
-      : '<span class="chain-context muted">No context ID</span>';
 
     return (
       '<article class="chain-node' +
@@ -1753,9 +1730,8 @@ class HAForensicLabPanel extends HTMLElement {
       "</time></div>" +
       (summary ? '<div class="event-summary">' + summary + "</div>" : "") +
       '<div class="chain-node-meta">' +
-      context +
-      (isTarget ? '<span class="target-label">Selected change</span>' : "") +
-      "</div></article>"
+      (isTarget ? '<span class="target-label">Selected event</span>' : "") +
+      "</div>" + this._metadataView(event, this._formatDateTime(event.timestamp)) + '</article>'
     );
   }
 
@@ -1770,13 +1746,13 @@ class HAForensicLabPanel extends HTMLElement {
     if (edge.evidence_type === "parent_context") {
       return (
         '<div class="evidence-connector parent"><span class="connector-line"></span>' +
-        '<div><strong>Parent context</strong><span>Confirmed: the child context explicitly points to this parent context.</span></div></div>'
+        '<div><strong>Parent context link</strong><span>Home Assistant explicitly links the child context to its parent.</span></div></div>'
       );
     }
 
     return (
       '<div class="evidence-connector same"><span class="connector-line"></span>' +
-      '<div><strong>Same context</strong><span>Confirmed shared Home Assistant context and captured order. Not proof of direct causation.</span></div></div>'
+      '<div><strong>Shared context</strong><span>Related activity; sequence alone does not prove causation.</span></div></div>'
     );
   }
 
@@ -1806,6 +1782,9 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   _bindControls() {
+    this.shadowRoot.querySelectorAll("[data-view]").forEach((button) => {
+      button.addEventListener("click", () => this._setView(button.dataset.view));
+    });
     const form = this.shadowRoot.getElementById("timeline-filters");
     const refresh = this.shadowRoot.getElementById("refresh-timeline");
     const clear = this.shadowRoot.getElementById("clear-filters");
@@ -1827,15 +1806,13 @@ class HAForensicLabPanel extends HTMLElement {
       form.addEventListener("submit", (event) => {
         event.preventDefault();
 
-        const entityInput = this.shadowRoot.getElementById("entity-filter");
-        const kindInput = this.shadowRoot.getElementById("kind-filter");
-
-        this._filters = {
-          entityId: entityInput ? entityInput.value.trim() : "",
-          kind: kindInput ? kindInput.value : "",
-        };
-
-        void this._loadTimeline();
+        void this._applyFilters();
+      });
+      this.shadowRoot.getElementById("entity-filter").addEventListener("input", (event) => {
+        this._updateFilterDraft("entityId", event.target.value);
+      });
+      this.shadowRoot.getElementById("kind-filter").addEventListener("change", (event) => {
+        this._updateFilterDraft("kind", event.target.value);
       });
     }
 
@@ -1847,8 +1824,8 @@ class HAForensicLabPanel extends HTMLElement {
 
     if (clear) {
       clear.addEventListener("click", () => {
-        this._filters = { entityId: "", kind: "" };
-        void this._loadTimeline();
+        this._filterDraft = { entityId: "", kind: "" };
+        void this._applyFilters();
       });
     }
 
@@ -1982,7 +1959,7 @@ class HAForensicLabPanel extends HTMLElement {
     return labels[kind] || "Event";
   }
 
-  _formatTime(timestamp) {
+  _formatTime(timestamp, precise = true) {
     const value = Number(timestamp);
     if (!Number.isFinite(value)) {
       return "Unknown time";
@@ -1994,7 +1971,7 @@ class HAForensicLabPanel extends HTMLElement {
         hour: "2-digit",
         minute: "2-digit",
         second: "2-digit",
-        fractionalSecondDigits: 3,
+        ...(precise ? { fractionalSecondDigits: 3 } : {}),
       });
     } catch (_error) {
       return date.toLocaleTimeString();
@@ -2011,7 +1988,7 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   _nullable(value) {
-    return value === null || value === undefined ? "unknown" : String(value);
+    return value === null || value === undefined ? "Not recorded" : String(value);
   }
 
   _code(value) {

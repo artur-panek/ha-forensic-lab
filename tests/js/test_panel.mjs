@@ -35,10 +35,10 @@ test("HA state updates preserve panel DOM and requests use the latest connection
   panel.connectedCallback();
   panel.hass = connection();
   await Promise.resolve();
-  assert.equal(requests, 3);
+  assert.equal(requests, 2);
   assert.equal(panel._hasLoaded, true);
   assert.equal(panel._incidentsLoaded, true);
-  assert.equal(panel._diagnosticsLoaded, true);
+  assert.equal(panel._diagnosticsLoaded, false);
 
   // Any innerHTML assignment would destroy draft inputs, focus and open details.
   let replacements = 0;
@@ -48,11 +48,11 @@ test("HA state updates preserve panel DOM and requests use the latest connection
   const latest = connection();
   panel.hass = latest;
   assert.equal(replacements, 0);
-  assert.equal(requests, 3);
+  assert.equal(requests, 2);
   assert.equal(panel._hass, latest);
 
   await panel._loadTimeline();
-  assert.equal(requests, 4);
+  assert.equal(requests, 3);
   assert.ok(replacements > 0);
 });
 
@@ -71,9 +71,10 @@ test("full buffers show server-reported retention instead of the filtered page s
   await panel._loadTimeline();
   const html = panel._statsView(1);
   assert.ok(html.includes("2m 5s"));
-  assert.ok(html.includes("Retained span"));
+  assert.ok(html.includes("History available"));
   assert.ok(html.includes("new events replace the oldest"));
-  assert.ok(html.includes("Timeline filters only change this view"));
+  assert.ok(panel._filterStatusText().includes("filters affect this view only"));
+  assert.ok(panel._statusView().includes("Snapshot"));
 });
 
 test("diagnostics distinguish filtered updates from buffer evictions", () => {
@@ -212,4 +213,62 @@ test("invalid window input is rejected before requesting a preview", async () =>
     await panel._saveIncident();
   }
   assert.equal(requests, 1);
+});
+
+test("filter drafts survive view changes and only Apply changes requests", async () => {
+  const panel = new Panel();
+  const requests = [];
+  panel._hass = { async callWS(request) { requests.push(request); return {}; } };
+  panel._updateFilterDraft("entityId", "light.hallway");
+  panel._updateFilterDraft("kind", "state_changed");
+  panel._setView("diagnostics");
+  await Promise.resolve();
+  panel._setView("timeline");
+  assert.equal(panel._filterDraft.entityId, "light.hallway");
+  assert.ok(panel._filterStatusText().includes("press Apply"));
+  await panel._loadTimeline();
+  assert.equal(requests.at(-1).entity_id, undefined);
+  await panel._applyFilters();
+  assert.equal(requests.at(-1).entity_id, "light.hallway");
+  assert.equal(requests.at(-1).kind, "state_changed");
+  assert.ok(!panel._filterStatusText().includes("press Apply"));
+});
+
+test("switching events ignores a late explanation and the previous trace", async () => {
+  const panel = new Panel();
+  let resolveOldExplanation;
+  let resolveOldTrace;
+  panel._hass = {
+    callWS(request) {
+      if (request.type === "trace/contexts") {
+        return new Promise((resolve) => { resolveOldTrace = resolve; });
+      }
+      if (request.event_id === "old") {
+        return new Promise((resolve) => { resolveOldExplanation = resolve; });
+      }
+      return Promise.resolve({ target_event_id: "new", events: [], edges: [], gaps: [] });
+    },
+  };
+  const old = panel._loadExplanation("old");
+  await panel._loadExplanation("new");
+  resolveOldExplanation({ target_event_id: "old", events: [], edges: [], gaps: [] });
+  await old;
+  assert.equal(panel._selectedEventId, "new");
+  assert.equal(panel._explanation.target_event_id, "new");
+  const pendingTrace = resolveOldTrace;
+  panel._closeExplanation();
+  pendingTrace({});
+  await Promise.resolve();
+  assert.equal(panel._traceProjection, null);
+  assert.equal(panel._traceLoading, false);
+});
+
+test("friendly names are escaped and missing state is distinct from unknown", () => {
+  const panel = new Panel();
+  panel._hass = { states: { "light.test": { attributes: { friendly_name: '<img src="x">' } } } };
+  const html = panel._eventView({ event_id: "event", entity_id: "light.test", kind: "state_changed", timestamp: 1, old_state: null, new_state: "unknown" });
+  assert.ok(html.includes("&lt;img"));
+  assert.ok(!html.includes('<img src="x">'));
+  assert.ok(html.includes("Not recorded"));
+  assert.ok(html.includes("unknown"));
 });
