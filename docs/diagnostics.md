@@ -2,7 +2,8 @@
 
 Diagnostics report aggregate counts and timings through HA's config-entry
 download and the admin-only `ha_forensic_lab/diagnostics` WebSocket command.
-The sidebar's Recorder health section uses the same payload.
+The sidebar panel's **Recorder** tab uses the same payload. It loads when opened
+and has its own refresh button and snapshot time, separate from the timeline.
 
 ## Capture
 

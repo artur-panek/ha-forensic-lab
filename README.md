@@ -33,14 +33,18 @@ testing must use an exact-SHA CI artifact; `main` changes as fixes are merged.
 ## Investigate a change
 
 - **Timeline:** refresh the captured state changes, service calls, automation
-  triggers and script starts. Filter by entity or event kind.
-- **Explain this change:** inspect the selected event's context chain, evidence
-  gaps and available automation/script trace steps.
+  triggers and script starts. Choose an exact entity ID or event kind, then
+  **Apply**. The view is a timestamped snapshot; **Refresh events** updates it.
+- **Inspect:** select an event row to see its state change, a plain-language
+  evidence summary and the recorded sequence beside the list. A single event
+  without links says **Cause not captured**. IDs and trace details are expandable.
 - **Save incident:** choose the seconds before/after the selected event, preview
   the event count, then freeze the window with structural trace evidence when
   available. Narrow busy windows to fit the 500-event limit.
-- **Review:** reopen a saved incident after the live buffer has moved on.
+- **Saved incidents → Review:** reopen an incident after the live buffer has moved on.
 - **Export:** download a sanitized ZIP with a SHA-256 checksum.
+- **Recorder:** inspect technical capture/storage counters separately from the
+  timeline. Refresh this view to update its own snapshot.
 
 Parent-context links identify relationships between HA contexts. Events sharing
 one context are shown in captured order; that order does not prove that one

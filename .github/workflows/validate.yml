@@ -11,6 +11,32 @@ permissions:
   contents: read
 
 jobs:
+  browser:
+    name: Panel browser checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+      - name: Install browser test tooling
+        run: |
+          npm install --prefix "$RUNNER_TEMP/panel-browser" --no-save --ignore-scripts --no-audit --no-fund playwright@1.62.1
+          node "$RUNNER_TEMP/panel-browser/node_modules/playwright/cli.js" install --with-deps chromium --only-shell
+      - name: Check desktop and mobile workflows
+        env:
+          PLAYWRIGHT_PACKAGE_ROOT: ${{ runner.temp }}/panel-browser
+          UI_SCREENSHOT_DIR: ${{ runner.temp }}/panel-screenshots
+        run: node scripts/panel-browser-smoke.mjs
+      - name: Upload UI screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: panel-screenshots-${{ github.sha }}
+          path: ${{ runner.temp }}/panel-screenshots/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
   hassfest:
     name: hassfest
     runs-on: ubuntu-latest

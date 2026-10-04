@@ -37,7 +37,9 @@ the behavior has been verified and recorded in the test report.
 ## Forensic workflow
 
 - [ ] timeline captures each enabled runtime event kind
-- [ ] Explain this change reconstructs context evidence correctly
+- [ ] selecting a timeline event reconstructs context evidence correctly
+- [ ] desktop/mobile layout keeps selection, filters and save controls usable
+- [ ] a single captured event is not presented as an explained cause
 - [ ] same-context sequence is not presented as direct causation
 - [ ] evidence gaps are visible
 - [ ] live trace enrichment works for retained automation/script traces

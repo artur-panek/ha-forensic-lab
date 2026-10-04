@@ -41,6 +41,10 @@ First alpha candidate.
 
 ### Fixed during candidate audit
 
+- put timeline selection and evidence details side by side; separate saved
+  incidents and recorder diagnostics, preserve drafts/scroll, and label snapshots
+- distinguish a single captured event from a known cause; use the same evidence
+  summaries for live inspection and saved review
 - preview incident event counts and adjust the before/after window in the panel
   before saving; preserve draft values after errors and keep the 500-event bound
 - skip unchanged-state updates by default, with an opt-in for attribute-based

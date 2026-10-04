@@ -107,16 +107,23 @@ Use a recognizable test entity such as `input_boolean.forensic_secret_test`.
 - [ ] confirm reported save errors = 0 and check HA logs for storage failures
 - [ ] confirm reducing rolling capacity results in the smaller active/persisted buffer
 
-### Explain this change
+### Inspect a change
 
 Use an automation that performs at least one service action.
 
 - [ ] select the resulting state change
-- [ ] run **Explain this change**
+- [ ] select its timeline row and verify the detail panel appears beside the list
+- [ ] verify a single-event context says **Cause not captured**, even when the API reports no reconstruction gaps
+- [ ] verify filter drafts, list position and selected event survive tab changes
 - [ ] verify parent-context vs same-context labels are not conflated
 - [ ] verify missing evidence is shown as a gap rather than invented causality
 - [ ] verify a retained Home Assistant trace enriches the view when available
 - [ ] verify trace variables/config/raw result payloads are not shown by HA Forensic Lab
+
+CI also runs `scripts/panel-browser-smoke.mjs` in Chromium against synthetic HA
+responses, with desktop/mobile and light/dark screenshots. Those checks cover
+layout, focus, filters, inspection and incident saving; they do not replace
+installation and lifecycle checks on a real Home Assistant instance.
 
 ### Saved incidents
 
