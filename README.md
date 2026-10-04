@@ -99,6 +99,13 @@ are documented in:
 - [`docs/alpha-testing.md`](docs/alpha-testing.md)
 - [`docs/alpha-release-checklist.md`](docs/alpha-release-checklist.md)
 - [`docs/known-limitations.md`](docs/known-limitations.md)
+- [`docs/release-process.md`](docs/release-process.md)
+
+Development changes are tracked in [`CHANGELOG.md`](CHANGELOG.md). The first
+alpha announcement is drafted in
+[`docs/alpha-release-notes.md`](docs/alpha-release-notes.md) but remains
+explicitly unfinished until real-instance validation establishes the
+compatibility floor.
 
 Read-only smoke example:
 
