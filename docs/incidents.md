@@ -42,11 +42,14 @@ Rolling-buffer eviction does not remove already saved incidents.
 
 ## API
 
-The admin-only WebSocket API currently exposes:
+The admin-only WebSocket API exposes:
 
 - ha_forensic_lab/incidents/list
 - ha_forensic_lab/incidents/get
 - ha_forensic_lab/incidents/create
 - ha_forensic_lab/incidents/delete
+- ha_forensic_lab/incidents/export
 
-Sanitized export is intentionally a separate next layer.
+Export is sanitized by default and has no raw mode in v0.1.
+
+See [Sanitized incident export](export.md).

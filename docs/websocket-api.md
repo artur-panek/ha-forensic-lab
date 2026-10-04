@@ -82,8 +82,36 @@ ha_forensic_lab/incidents/delete
 
 Requires incident_id.
 
+### Export
+
+~~~text
+ha_forensic_lab/incidents/export
+~~~
+
+Requires incident_id.
+
+The response contains a safe-profile sanitized ZIP bundle:
+
+~~~json
+{
+  "filename": "ha-forensic-lab-ab12cd34.zip",
+  "content_type": "application/zip",
+  "encoding": "base64",
+  "data": "<base64>",
+  "sha256": "<hex digest>",
+  "size_bytes": 1234,
+  "profile": "safe"
+}
+~~~
+
+The ZIP contains manifest.json, incident.json and summary.md.
+
+Export construction is performed outside the Home Assistant event loop.
+
 ## Security
 
 Every command requires an authenticated Home Assistant administrator.
 
-The API exposes normalized forensic evidence only. It does not expose raw Home Assistant event payloads or complete service data.
+The live APIs expose normalized forensic evidence only. Export is safe-by-default and does not provide a raw mode in v0.1.
+
+See [Sanitized incident export](export.md).

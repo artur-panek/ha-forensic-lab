@@ -11,6 +11,7 @@ from homeassistant.core import HomeAssistant, callback
 from .capture import ForensicCapture
 from .causality import EvidenceEdge, ForensicExplanation, explain_event
 from .const import DATA_CAPTURE, DATA_INCIDENT_STORE, DOMAIN
+from .export_bundle import ExportBundle, build_export_bundle
 from .incident_store import IncidentLimitReached, IncidentStore
 from .incidents import (
     DEFAULT_INCIDENT_AFTER_SECONDS,
@@ -38,6 +39,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_incidents_get)
     websocket_api.async_register_command(hass, websocket_incidents_create)
     websocket_api.async_register_command(hass, websocket_incidents_delete)
+    websocket_api.async_register_command(hass, websocket_incidents_export)
 
 
 @websocket_api.require_admin
@@ -282,6 +284,49 @@ async def websocket_incidents_delete(
         return
 
     connection.send_result(msg["id"])
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): "ha_forensic_lab/incidents/export",
+        probatio.Required("incident_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_incidents_export(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Build a safe-by-default sanitized ZIP export for one incident."""
+    store = _incident_store_or_error(hass, connection, msg["id"])
+    if store is None:
+        return
+
+    incident = store.get(msg["incident_id"])
+    if incident is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Saved forensic incident not found",
+        )
+        return
+
+    bundle = await hass.async_add_executor_job(build_export_bundle, incident)
+    connection.send_result(msg["id"], _export_bundle_to_dict(bundle))
+
+
+def _export_bundle_to_dict(bundle: ExportBundle) -> dict[str, Any]:
+    return {
+        "filename": bundle.filename,
+        "content_type": bundle.content_type,
+        "encoding": bundle.encoding,
+        "data": bundle.data,
+        "sha256": bundle.sha256,
+        "size_bytes": bundle.size_bytes,
+        "profile": bundle.profile,
+    }
 
 
 def _capture_or_error(
