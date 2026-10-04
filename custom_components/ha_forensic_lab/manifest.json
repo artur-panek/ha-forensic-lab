@@ -1,0 +1,19 @@
+{
+  "domain": "ha_forensic_lab",
+  "name": "HA Forensic Lab",
+  "codeowners": [
+    "@artur-panek"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http"
+  ],
+  "documentation": "https://github.com/artur-panek/ha-forensic-lab",
+  "integration_type": "service",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/artur-panek/ha-forensic-lab/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.0.1"
+}
