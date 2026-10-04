@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-import probatio
+import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.loader import async_get_integration
@@ -57,15 +57,15 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): "ha_forensic_lab/timeline",
-        probatio.Optional("limit", default=DEFAULT_TIMELINE_LIMIT): probatio.All(
-            int, probatio.Range(min=1, max=MAX_TIMELINE_LIMIT)
+        vol.Required("type"): "ha_forensic_lab/timeline",
+        vol.Optional("limit", default=DEFAULT_TIMELINE_LIMIT): vol.All(
+            int, vol.Range(min=1, max=MAX_TIMELINE_LIMIT)
         ),
-        probatio.Optional("entity_id"): str,
-        probatio.Optional("context_id"): str,
-        probatio.Optional("kind"): probatio.In(_EVENT_KINDS),
-        probatio.Optional("since"): probatio.All(
-            probatio.Coerce(float), probatio.Range(min=0)
+        vol.Optional("entity_id"): str,
+        vol.Optional("context_id"): str,
+        vol.Optional("kind"): vol.In(_EVENT_KINDS),
+        vol.Optional("since"): vol.All(
+            vol.Coerce(float), vol.Range(min=0)
         ),
     }
 )
@@ -103,10 +103,10 @@ def websocket_timeline(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): "ha_forensic_lab/explain",
-        probatio.Required("event_id"): str,
-        probatio.Optional("max_events", default=DEFAULT_EXPLAIN_LIMIT): probatio.All(
-            int, probatio.Range(min=1, max=MAX_EXPLAIN_LIMIT)
+        vol.Required("type"): "ha_forensic_lab/explain",
+        vol.Required("event_id"): str,
+        vol.Optional("max_events", default=DEFAULT_EXPLAIN_LIMIT): vol.All(
+            int, vol.Range(min=1, max=MAX_EXPLAIN_LIMIT)
         ),
     }
 )
@@ -163,8 +163,8 @@ def websocket_incidents_list(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): "ha_forensic_lab/incidents/get",
-        probatio.Required("incident_id"): str,
+        vol.Required("type"): "ha_forensic_lab/incidents/get",
+        vol.Required("incident_id"): str,
     }
 )
 @callback
@@ -196,14 +196,14 @@ def websocket_incidents_get(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): "ha_forensic_lab/incidents/review",
-        probatio.Required("incident_id"): str,
-        probatio.Optional(
+        vol.Required("type"): "ha_forensic_lab/incidents/review",
+        vol.Required("incident_id"): str,
+        vol.Optional(
             "max_events",
             default=DEFAULT_INCIDENT_REVIEW_LIMIT,
-        ): probatio.All(
+        ): vol.All(
             int,
-            probatio.Range(min=1, max=MAX_INCIDENT_REVIEW_LIMIT),
+            vol.Range(min=1, max=MAX_INCIDENT_REVIEW_LIMIT),
         ),
     }
 )
@@ -240,22 +240,22 @@ def websocket_incidents_review(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): "ha_forensic_lab/incidents/create",
-        probatio.Required("target_event_id"): str,
-        probatio.Optional(
+        vol.Required("type"): "ha_forensic_lab/incidents/create",
+        vol.Required("target_event_id"): str,
+        vol.Optional(
             "before_seconds", default=DEFAULT_INCIDENT_BEFORE_SECONDS
-        ): probatio.All(
-            probatio.Coerce(float),
-            probatio.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
+        ): vol.All(
+            vol.Coerce(float),
+            vol.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
         ),
-        probatio.Optional(
+        vol.Optional(
             "after_seconds", default=DEFAULT_INCIDENT_AFTER_SECONDS
-        ): probatio.All(
-            probatio.Coerce(float),
-            probatio.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
+        ): vol.All(
+            vol.Coerce(float),
+            vol.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
         ),
-        probatio.Optional("title"): str,
-        probatio.Optional("trace_evidence"): dict,
+        vol.Optional("title"): str,
+        vol.Optional("trace_evidence"): dict,
     }
 )
 @websocket_api.async_response
@@ -316,8 +316,8 @@ async def websocket_incidents_create(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): "ha_forensic_lab/incidents/delete",
-        probatio.Required("incident_id"): str,
+        vol.Required("type"): "ha_forensic_lab/incidents/delete",
+        vol.Required("incident_id"): str,
     }
 )
 @websocket_api.async_response
@@ -347,8 +347,8 @@ async def websocket_incidents_delete(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
-        probatio.Required("type"): "ha_forensic_lab/incidents/export",
-        probatio.Required("incident_id"): str,
+        vol.Required("type"): "ha_forensic_lab/incidents/export",
+        vol.Required("incident_id"): str,
     }
 )
 @websocket_api.async_response

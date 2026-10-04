@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, override
 
-import probatio
+import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -86,29 +86,29 @@ class HAForensicLabOptionsFlow(OptionsFlow):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=probatio.Schema(
+            data_schema=vol.Schema(
                 {
-                    probatio.Required(
+                    vol.Required(
                         CONF_CAPTURE_BUFFER_SIZE,
                         default=options[CONF_CAPTURE_BUFFER_SIZE],
-                    ): probatio.All(
+                    ): vol.All(
                         int,
-                        probatio.Range(
+                        vol.Range(
                             min=MIN_CAPTURE_BUFFER_SIZE,
                             max=MAX_CAPTURE_BUFFER_SIZE,
                         ),
                     ),
-                    probatio.Required(
+                    vol.Required(
                         CONF_PERSIST_INTERVAL_SECONDS,
                         default=options[CONF_PERSIST_INTERVAL_SECONDS],
-                    ): probatio.All(
+                    ): vol.All(
                         int,
-                        probatio.Range(
+                        vol.Range(
                             min=MIN_PERSIST_INTERVAL_SECONDS,
                             max=MAX_PERSIST_INTERVAL_SECONDS,
                         ),
                     ),
-                    probatio.Required(
+                    vol.Required(
                         CONF_CAPTURE_EVENT_KINDS,
                         default=options[CONF_CAPTURE_EVENT_KINDS],
                     ): SelectSelector(
@@ -117,11 +117,11 @@ class HAForensicLabOptionsFlow(OptionsFlow):
                             multiple=True,
                         )
                     ),
-                    probatio.Optional(
+                    vol.Optional(
                         CONF_EXCLUDED_ENTITIES,
                         default=options[CONF_EXCLUDED_ENTITIES],
                     ): EntitySelector(EntitySelectorConfig(multiple=True)),
-                    probatio.Optional(
+                    vol.Optional(
                         CONF_EXCLUDED_DOMAINS,
                         default=options[CONF_EXCLUDED_DOMAINS],
                     ): SelectSelector(

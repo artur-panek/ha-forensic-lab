@@ -36,7 +36,7 @@ The UI must make those classes visually distinct.
 
 ## v0.1 alpha candidate
 
-Implemented in the current development stack:
+Implemented on `main`:
 
 - bounded normalized runtime capture
 - configurable event-type/entity/domain capture filters
@@ -72,8 +72,15 @@ Still intentionally outside the first alpha:
 
 The project is not yet in the default HACS catalogue.
 
-Once the first alpha is intentionally published, testers can install it through
-a HACS custom repository or the attached deterministic manual-install ZIP.
+For development testing, add this repository to HACS as **Integration** and
+install the default branch (`main`). HACS supports this before the first release.
+The code is an **unreleased candidate**, not a validated public alpha.
+
+[![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=artur-panek&repository=ha-forensic-lab&category=integration)
+
+Requires Home Assistant **2026.9.4 or newer** and an administrator account.
+For the release-validation matrix, use the exact-SHA CI ZIP and record its SHA;
+a HACS `main` install follows a moving development branch.
 
 See [Installation](docs/installation.md).
 
@@ -127,20 +134,10 @@ pseudonymize automation/script, run, context and entity identifiers.
 Sanitized incident export is safe-only in v0.1. The sanitizer is separately
 tested and export ZIPs include a SHA-256 digest.
 
-## Installation / testing
+## Technical documentation
 
-This repository is **pre-alpha** and does not have a numbered public release yet. It is useful for development and architecture testing, not as a production forensic recorder.
-
-For a manual test install:
-
-1. Copy `custom_components/ha_forensic_lab/` into your Home Assistant configuration directory under `custom_components/`.
-2. Restart Home Assistant.
-3. Open **Settings → Devices & services → Add integration → HA Forensic Lab**.
-4. Confirm setup. The current build registers the admin-only placeholder panel.
-
-HACS repository metadata is already present so the project follows the expected custom-integration layout, but normal user installation will be documented around the first useful recording release.
-
-For the technical design, see [architecture](docs/architecture.md), the [v0.1 scope](docs/v0.1-scope.md) and the [roadmap](docs/roadmap.md).
+For the technical design, see [architecture](docs/architecture.md), the
+[v0.1 scope](docs/v0.1-scope.md) and the [roadmap](docs/roadmap.md).
 
 ## Development
 
