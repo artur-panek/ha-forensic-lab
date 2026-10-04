@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import deque
+from collections.abc import Callable, Iterable
 from itertools import count
+from uuid import uuid4
 
 from homeassistant.components.automation import EVENT_AUTOMATION_TRIGGERED
 from homeassistant.components.script import EVENT_SCRIPT_STARTED
@@ -29,13 +31,20 @@ class ForensicCapture:
         hass: HomeAssistant,
         *,
         max_events: int = DEFAULT_CAPTURE_BUFFER_SIZE,
+        initial_events: Iterable[ForensicEvent] = (),
+        on_change: Callable[[], None] | None = None,
     ) -> None:
         """Initialize the capture layer."""
         if max_events < 1:
             raise ValueError("max_events must be at least 1")
 
         self._hass = hass
-        self._events: deque[ForensicEvent] = deque(maxlen=max_events)
+        self._events: deque[ForensicEvent] = deque(
+            initial_events,
+            maxlen=max_events,
+        )
+        self._on_change = on_change
+        self._session_id = uuid4().hex
         self._sequence = count(1)
         self._remove_listeners: list[CALLBACK_TYPE] = []
 
@@ -69,6 +78,14 @@ class ForensicCapture:
     @callback
     def _handle_event(self, event: Event) -> None:
         """Normalize one event and append it to the bounded buffer."""
-        normalized = normalize_event(event, next(self._sequence))
-        if normalized is not None:
-            self._events.append(normalized)
+        normalized = normalize_event(
+            event,
+            next(self._sequence),
+            self._session_id,
+        )
+        if normalized is None:
+            return
+
+        self._events.append(normalized)
+        if self._on_change is not None:
+            self._on_change()

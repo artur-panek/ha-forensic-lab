@@ -57,11 +57,11 @@ def test_state_changed_keeps_minimal_forensic_metadata() -> None:
         },
     )
 
-    result = models.normalize_event(event, 7)
+    result = models.normalize_event(event, 7, "session-a")
 
     assert result is not None
     assert result.kind == models.ForensicEventKind.STATE_CHANGED
-    assert result.event_id == "123.250000:00000007"
+    assert result.event_id == "session-a:00000007"
     assert result.entity_id == "light.hallway"
     assert result.domain == "light"
     assert result.old_state == "off"
@@ -85,7 +85,7 @@ def test_service_call_extracts_targets_without_copying_payload() -> None:
         },
     )
 
-    result = models.normalize_event(event, 8)
+    result = models.normalize_event(event, 8, "session-a")
 
     assert result is not None
     assert result.kind == models.ForensicEventKind.CALL_SERVICE
@@ -105,7 +105,7 @@ def test_automation_keeps_source_and_identity() -> None:
         },
     )
 
-    result = models.normalize_event(event, 9)
+    result = models.normalize_event(event, 9, "session-a")
 
     assert result is not None
     assert result.kind == models.ForensicEventKind.AUTOMATION_TRIGGERED
@@ -124,7 +124,7 @@ def test_script_started_keeps_identity() -> None:
         },
     )
 
-    result = models.normalize_event(event, 10)
+    result = models.normalize_event(event, 10, "session-a")
 
     assert result is not None
     assert result.kind == models.ForensicEventKind.SCRIPT_STARTED
@@ -135,4 +135,15 @@ def test_script_started_keeps_identity() -> None:
 def test_unsupported_events_are_ignored() -> None:
     event = FakeEvent("some_future_event", {"secret": "value"})
 
-    assert models.normalize_event(event, 11) is None
+    assert models.normalize_event(event, 11, "session-a") is None
+
+
+def test_event_ids_are_namespaced_by_capture_session() -> None:
+    event = FakeEvent("script_started", {"entity_id": "script.example"})
+
+    first = models.normalize_event(event, 1, "session-a")
+    second = models.normalize_event(event, 1, "session-b")
+
+    assert first is not None
+    assert second is not None
+    assert first.event_id != second.event_id

@@ -7,7 +7,7 @@ HA Forensic Lab is an experimental Home Assistant custom integration for reconst
 The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
 
 > [!IMPORTANT]
-> HA Forensic Lab is pre-alpha. The current development stack captures a minimal normalized runtime event stream into a bounded in-memory buffer and exposes it through an admin-only timeline. Persistent storage is not implemented yet; deterministic context-based reconstruction is available for captured state changes.
+> HA Forensic Lab is pre-alpha. The current development stack captures a bounded normalized runtime event stream, persists rolling snapshots through Home Assistant storage, exposes an admin-only timeline, and supports deterministic context-based reconstruction for captured state changes.
 
 ## The problem
 
@@ -40,7 +40,7 @@ The first useful release is intentionally small:
 - sanitized incident export
 - native Home Assistant sidebar panel
 
-See [docs/v0.1-scope.md](docs/v0.1-scope.md) for the acceptance criteria, [docs/architecture.md](docs/architecture.md) for the proposed design, [docs/event-model.md](docs/event-model.md) for the capture schema and [docs/websocket-api.md](docs/websocket-api.md) for the internal read API.
+See [docs/v0.1-scope.md](docs/v0.1-scope.md), [docs/architecture.md](docs/architecture.md), [docs/event-model.md](docs/event-model.md), [docs/persistence.md](docs/persistence.md) and [docs/websocket-api.md](docs/websocket-api.md).
 
 ## Repository layout
 
@@ -48,10 +48,13 @@ See [docs/v0.1-scope.md](docs/v0.1-scope.md) for the acceptance criteria, [docs/
 custom_components/ha_forensic_lab/
 ├── __init__.py
 ├── capture.py
+├── causality.py
 ├── config_flow.py
 ├── const.py
 ├── models.py
 ├── query.py
+├── storage_codec.py
+├── store.py
 ├── websocket.py
 ├── manifest.json
 ├── strings.json
@@ -73,7 +76,9 @@ The capture layer listens for:
 - automation triggers
 - script starts
 
-It stores only a compact normalized representation in a bounded in-memory buffer. No database writes or raw payload persistence are performed yet.
+It stores only a compact normalized representation in a bounded 2048-event buffer. The same bounded snapshot is written to Home Assistant's private storage at a fixed maximum delay and restored on the next setup.
+
+No raw event payloads or complete service data are persisted.
 
 The sidebar timeline can currently:
 
@@ -89,6 +94,12 @@ The sidebar timeline can currently:
 - see explicit gaps when the bounded buffer cannot support a complete reconstruction
 
 The frontend talks only to the admin-only Home Assistant WebSocket API; it does not read internal storage directly.
+
+## Persistence caveat
+
+Rolling persistence is not a write-ahead log. A hard process or host crash can lose the newest events since the most recent completed snapshot, normally roughly the configured 10-second interval. Clean unloads flush immediately.
+
+See [docs/persistence.md](docs/persistence.md).
 
 ## Development
 
@@ -107,7 +118,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Forensic captures may contain entity names, service metadata, user IDs and automation context. Richer future evidence may be more sensitive, so exports must be sanitized by default and the analysis panel is admin-only.
 
-The current UI HTML-escapes values returned from Home Assistant before rendering them.
+The current UI HTML-escapes values returned from Home Assistant before rendering them. Persistent normalized snapshots use Home Assistant's private storage mode.
 
 Please report security issues as described in [SECURITY.md](SECURITY.md).
 

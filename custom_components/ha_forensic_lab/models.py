@@ -64,7 +64,11 @@ class ForensicEvent:
     new_state: str | None = None
 
 
-def normalize_event(event: EventLike, sequence: int) -> ForensicEvent | None:
+def normalize_event(
+    event: EventLike,
+    sequence: int,
+    session_id: str,
+) -> ForensicEvent | None:
     """Normalize a supported Home Assistant event.
 
     Arbitrary event/service payloads and state attributes are deliberately not
@@ -81,7 +85,7 @@ def normalize_event(event: EventLike, sequence: int) -> ForensicEvent | None:
 
     context = event.context
     common = {
-        "event_id": _event_id(timestamp, sequence),
+        "event_id": _event_id(session_id, sequence),
         "kind": kind,
         "timestamp": timestamp,
         "context_id": _string_or_none(getattr(context, "id", None)),
@@ -127,9 +131,9 @@ def normalize_event(event: EventLike, sequence: int) -> ForensicEvent | None:
     )
 
 
-def _event_id(timestamp: float, sequence: int) -> str:
-    """Build a process-local event identifier sortable by capture order."""
-    return f"{timestamp:.6f}:{sequence:08d}"
+def _event_id(session_id: str, sequence: int) -> str:
+    """Build an event identifier unique to one capture session and sequence."""
+    return f"{session_id}:{sequence:08d}"
 
 
 def _domain_from_entity_id(entity_id: str | None) -> str | None:

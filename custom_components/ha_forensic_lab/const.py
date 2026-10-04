@@ -4,7 +4,13 @@ DOMAIN = "ha_forensic_lab"
 NAME = "HA Forensic Lab"
 
 DEFAULT_CAPTURE_BUFFER_SIZE = 2048
+DEFAULT_PERSIST_INTERVAL_SECONDS = 10.0
+
 DATA_CAPTURE = "capture"
+DATA_STORE = "store"
+
+STORAGE_KEY = f"{DOMAIN}.events"
+STORAGE_VERSION = 1
 
 PANEL_COMPONENT_NAME = "ha-forensic-lab-panel"
 PANEL_FILENAME = "ha-forensic-lab-panel.js"
