@@ -37,6 +37,10 @@ class HAForensicLabPanel extends HTMLElement {
     this._exportingIncidentId = null;
     this._deletingIncidentId = null;
     this._incidentNotice = null;
+    this._reviewIncidentId = null;
+    this._incidentReview = null;
+    this._incidentReviewLoading = false;
+    this._incidentReviewError = null;
   }
 
   connectedCallback() {
@@ -223,6 +227,49 @@ class HAForensicLabPanel extends HTMLElement {
     }
   }
 
+
+  async _reviewIncident(incidentId) {
+    if (!this._hass || !incidentId || this._incidentReviewLoading) {
+      return;
+    }
+
+    this._reviewIncidentId = incidentId;
+    this._incidentReview = null;
+    this._incidentReviewError = null;
+    this._incidentReviewLoading = true;
+    this._render();
+
+    try {
+      this._incidentReview = await this._hass.callWS({
+        type: "ha_forensic_lab/incidents/review",
+        incident_id: incidentId,
+        max_events: 100,
+      });
+    } catch (error) {
+      this._incidentReviewError =
+        error && error.message
+          ? String(error.message)
+          : "Unable to review saved incident";
+    } finally {
+      this._incidentReviewLoading = false;
+      this._render();
+
+      const reviewPanel =
+        this.shadowRoot && this.shadowRoot.getElementById("saved-review-panel");
+      if (reviewPanel) {
+        reviewPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    }
+  }
+
+  _closeIncidentReview() {
+    this._reviewIncidentId = null;
+    this._incidentReview = null;
+    this._incidentReviewError = null;
+    this._incidentReviewLoading = false;
+    this._render();
+  }
+
   async _exportIncident(incidentId) {
     if (!this._hass || !incidentId || this._exportingIncidentId) {
       return;
@@ -279,6 +326,11 @@ class HAForensicLabPanel extends HTMLElement {
         incident_id: incidentId,
       });
       this._incidentNotice = "Saved incident deleted.";
+      if (this._reviewIncidentId === incidentId) {
+        this._reviewIncidentId = null;
+        this._incidentReview = null;
+        this._incidentReviewError = null;
+      }
       deleted = true;
     } catch (error) {
       this._incidentsError =
@@ -460,6 +512,7 @@ class HAForensicLabPanel extends HTMLElement {
     const content = this._contentView(events);
     const explanation = this._explanationView();
     const incidents = this._incidentsView();
+    const savedReview = this._savedIncidentReviewView();
 
     this.shadowRoot.innerHTML =
       this._styles() +
@@ -475,6 +528,7 @@ class HAForensicLabPanel extends HTMLElement {
       this._statsView(events.length) +
       this._filtersView() +
       incidents +
+      savedReview +
       explanation +
       content +
       '<footer>Evidence-first by design. This view shows normalized runtime metadata only; raw event payloads are not exposed.</footer>' +
@@ -797,6 +851,187 @@ class HAForensicLabPanel extends HTMLElement {
 
 
 
+
+  _savedIncidentReviewView() {
+    if (!this._reviewIncidentId) {
+      return "";
+    }
+
+    if (this._incidentReviewLoading) {
+      return (
+        '<section class="saved-review-panel" id="saved-review-panel">' +
+        this._savedReviewHeader(null, null) +
+        '<div class="trace-state"><div class="spinner" aria-hidden="true"></div>' +
+        '<div><strong>Reconstructing frozen evidence…</strong><p>This review uses the saved incident only; it does not depend on the live rolling buffer.</p></div></div>' +
+        "</section>"
+      );
+    }
+
+    if (this._incidentReviewError) {
+      return (
+        '<section class="saved-review-panel" id="saved-review-panel">' +
+        this._savedReviewHeader(null, null) +
+        '<div class="trace-state"><div><strong>Could not review this incident.</strong><p>' +
+        this._escape(this._incidentReviewError) +
+        '</p><button class="button primary" id="retry-incident-review" type="button">Try again</button></div></div>' +
+        "</section>"
+      );
+    }
+
+    if (!this._incidentReview) {
+      return "";
+    }
+
+    const review = this._incidentReview;
+    const incident = review.incident || {};
+    const explanation = review.explanation || {};
+    const events = Array.isArray(explanation.events) ? explanation.events : [];
+    const edges = Array.isArray(explanation.edges) ? explanation.edges : [];
+    const gaps = Array.isArray(explanation.gaps) ? explanation.gaps : [];
+    const targetEventId = explanation.target_event_id;
+
+    const chain = events
+      .map((event, index) => {
+        const incoming =
+          index === 0
+            ? null
+            : edges.find((edge) => edge.target_event_id === event.event_id);
+        return (
+          (index === 0 ? "" : this._evidenceConnectorView(incoming)) +
+          this._explanationEventView(event, targetEventId)
+        );
+      })
+      .join("");
+
+    const gapView = gaps.length
+      ? '<div class="evidence-gaps"><div class="gap-title">Frozen evidence gaps</div>' +
+        gaps
+          .map(
+            (gap) =>
+              '<div class="gap-row"><span class="gap-marker">!</span><span>' +
+              this._escape(this._gapLabel(gap)) +
+              "</span></div>"
+          )
+          .join("") +
+        "</div>"
+      : "";
+
+    const status = {
+      className: explanation.complete ? "complete" : "incomplete",
+      label: explanation.complete
+        ? "Frozen context evidence complete"
+        : "Frozen evidence gap",
+    };
+
+    return (
+      '<section class="saved-review-panel" id="saved-review-panel">' +
+      this._savedReviewHeader(incident, status) +
+      '<div class="evidence-note"><strong>Durable review</strong><p>This causality chain is reconstructed from the incident snapshot, so it remains reviewable after rolling-buffer eviction or a Home Assistant restart.</p></div>' +
+      gapView +
+      '<div class="chain-heading"><span class="section-kicker">Frozen · oldest to newest</span><h3>Context evidence chain</h3></div>' +
+      '<div class="explain-chain">' +
+      chain +
+      "</div>" +
+      this._frozenTraceView(review.trace_evidence) +
+      "</section>"
+    );
+  }
+
+  _savedReviewHeader(incident, status) {
+    const title =
+      incident && incident.title ? incident.title : "Saved incident";
+    const meta =
+      incident && incident.event_count
+        ? '<div class="saved-review-meta"><span>' +
+          this._escape(incident.event_count) +
+          " frozen events</span>" +
+          (incident.has_trace_evidence
+            ? '<span class="incident-trace-badge">trace frozen</span>'
+            : "") +
+          "</div>"
+        : "";
+    const statusView = status
+      ? '<span class="evidence-status ' +
+        this._escape(status.className) +
+        '">' +
+        this._escape(status.label) +
+        "</span>"
+      : "";
+
+    return (
+      '<div class="explain-head"><div><span class="section-kicker">Saved incident review</span><h2>' +
+      this._escape(title) +
+      "</h2>" +
+      meta +
+      "</div>" +
+      '<div class="explain-head-actions">' +
+      statusView +
+      '<button class="icon-button" id="close-incident-review" type="button" aria-label="Close saved incident review" title="Close saved incident review">×</button>' +
+      "</div></div>"
+    );
+  }
+
+  _frozenTraceView(trace) {
+    if (!trace) {
+      return (
+        '<section class="trace-panel">' +
+        '<div class="trace-head"><div><span class="section-kicker">Frozen trace evidence</span><h3>Execution trace</h3></div>' +
+        '<span class="trace-badge muted-badge">Not captured</span></div>' +
+        '<div class="trace-state"><div><strong>No frozen trace projection.</strong><p>The incident still contains its deterministic context evidence. The richer Home Assistant trace was not available when it was saved.</p></div></div>' +
+        "</section>"
+      );
+    }
+
+    const reference = trace.reference || {};
+    const identity =
+      reference.domain && reference.item_id
+        ? reference.domain + "." + reference.item_id
+        : "automation/script";
+    const steps = Array.isArray(trace.steps) ? trace.steps : [];
+
+    const facts = [
+      ["Run", reference.run_id],
+      ["State", trace.state],
+      ["Execution", trace.script_execution],
+      ["Last step", trace.last_step],
+    ].filter(([, value]) => value);
+
+    const factView = facts.length
+      ? '<div class="trace-facts">' +
+        facts
+          .map(
+            ([label, value]) =>
+              '<div class="trace-fact"><span>' +
+              this._escape(label) +
+              "</span>" +
+              this._code(value) +
+              "</div>"
+          )
+          .join("") +
+        "</div>"
+      : "";
+
+    const stepView = steps.length
+      ? '<div class="trace-steps">' +
+        steps.map((step, index) => this._traceStepView(step, index)).join("") +
+        "</div>"
+      : '<div class="trace-state"><div><strong>No structural steps were frozen.</strong></div></div>';
+
+    return (
+      '<section class="trace-panel">' +
+      '<div class="trace-head"><div><span class="section-kicker">Frozen trace evidence</span><h3>Execution trace</h3><div class="trace-identity">' +
+      this._code(identity) +
+      "</div></div>" +
+      '<span class="trace-badge">Durable skeleton</span></div>' +
+      factView +
+      (trace.truncated
+        ? '<div class="trace-warning">This saved trace skeleton was truncated at its structural step limit.</div>'
+        : "") +
+      stepView +
+      "</section>"
+    );
+  }
+
   _incidentsView() {
     const incidents = this._incidents || [];
     const notice = this._incidentNotice
@@ -871,6 +1106,17 @@ class HAForensicLabPanel extends HTMLElement {
       this._escape(this._formatIncidentDate(incident.created_at)) +
       "</time></div></div>" +
       '<div class="incident-actions">' +
+      '<button class="button button-small review-incident-button" type="button" data-incident-id="' +
+      this._escape(incidentId) +
+      '"' +
+      (this._incidentReviewLoading && this._reviewIncidentId === incidentId
+        ? " disabled"
+        : "") +
+      ">" +
+      (this._incidentReviewLoading && this._reviewIncidentId === incidentId
+        ? "Opening…"
+        : "Review") +
+      "</button>" +
       '<button class="button button-small primary export-incident-button" type="button" data-incident-id="' +
       this._escape(incidentId) +
       '"' +
@@ -1243,6 +1489,10 @@ class HAForensicLabPanel extends HTMLElement {
       this.shadowRoot.getElementById("retry-explanation");
     const refreshIncidents =
       this.shadowRoot.getElementById("refresh-incidents");
+    const closeIncidentReview =
+      this.shadowRoot.getElementById("close-incident-review");
+    const retryIncidentReview =
+      this.shadowRoot.getElementById("retry-incident-review");
 
     if (form) {
       form.addEventListener("submit", (event) => {
@@ -1312,6 +1562,17 @@ class HAForensicLabPanel extends HTMLElement {
       });
 
     this.shadowRoot
+      .querySelectorAll(".review-incident-button")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const incidentId = button.dataset.incidentId;
+          if (incidentId) {
+            void this._reviewIncident(incidentId);
+          }
+        });
+      });
+
+    this.shadowRoot
       .querySelectorAll(".export-incident-button")
       .forEach((button) => {
         button.addEventListener("click", () => {
@@ -1336,6 +1597,18 @@ class HAForensicLabPanel extends HTMLElement {
     if (refreshIncidents) {
       refreshIncidents.addEventListener("click", () => {
         void this._loadIncidents();
+      });
+    }
+
+    if (closeIncidentReview) {
+      closeIncidentReview.addEventListener("click", () => {
+        this._closeIncidentReview();
+      });
+    }
+
+    if (retryIncidentReview && this._reviewIncidentId) {
+      retryIncidentReview.addEventListener("click", () => {
+        void this._reviewIncident(this._reviewIncidentId);
       });
     }
   }
@@ -1433,7 +1706,7 @@ class HAForensicLabPanel extends HTMLElement {
       ".event-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.event-heading{display:flex;min-width:0;gap:9px;align-items:center;flex-wrap:wrap}.kind{padding:4px 7px;border-radius:7px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.68rem;font-weight:750;letter-spacing:.05em;text-transform:uppercase}.event-title{min-width:0;font-size:.98rem;overflow-wrap:anywhere}" +
       ".time{white-space:nowrap;color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.event-summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;line-height:1.45}.state-value{font-weight:650}.arrow,.muted{color:var(--secondary-text-color)}" +
       ".event-actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}.button-small{min-height:34px;padding:0 10px;font-size:.78rem}" +
-      ".incidents-panel{margin:0 0 28px;padding:18px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none)}.incident-heading{align-items:center}.incident-heading-actions{display:flex;gap:8px;align-items:center}.incident-count{color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.incident-list{display:grid;gap:9px}.incident-card{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:13px 14px;border:1px solid var(--divider-color);border-radius:12px;background:var(--primary-background-color)}.incident-main{min-width:0}.incident-title{display:inline;overflow-wrap:anywhere}.incident-trace-badge{display:inline-flex;margin-left:8px;padding:3px 6px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.65rem;font-weight:750;text-transform:uppercase;letter-spacing:.04em}.incident-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:5px;color:var(--secondary-text-color);font-size:.75rem}.incident-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}.incident-empty{display:flex;gap:10px;align-items:center;padding:18px;border:1px dashed var(--divider-color);border-radius:12px;color:var(--secondary-text-color);font-size:.84rem}.incident-empty strong{color:var(--primary-text-color)}.incident-notice,.incident-error{margin:0 0 10px;padding:9px 11px;border-radius:9px;font-size:.8rem}.incident-notice{background:var(--secondary-background-color);border-left:3px solid var(--success-color,#4caf50)}.incident-error{background:var(--secondary-background-color);border-left:3px solid var(--error-color,#db4437)}.incident-help{margin:11px 0 0;color:var(--secondary-text-color);font-size:.74rem;line-height:1.45}" +
+      ".saved-review-panel{margin:0 0 28px;padding:20px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none);scroll-margin-top:16px}.saved-review-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:7px;color:var(--secondary-text-color);font-size:.75rem}.incidents-panel{margin:0 0 28px;padding:18px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none)}.incident-heading{align-items:center}.incident-heading-actions{display:flex;gap:8px;align-items:center}.incident-count{color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.incident-list{display:grid;gap:9px}.incident-card{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:13px 14px;border:1px solid var(--divider-color);border-radius:12px;background:var(--primary-background-color)}.incident-main{min-width:0}.incident-title{display:inline;overflow-wrap:anywhere}.incident-trace-badge{display:inline-flex;margin-left:8px;padding:3px 6px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.65rem;font-weight:750;text-transform:uppercase;letter-spacing:.04em}.incident-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:5px;color:var(--secondary-text-color);font-size:.75rem}.incident-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}.incident-empty{display:flex;gap:10px;align-items:center;padding:18px;border:1px dashed var(--divider-color);border-radius:12px;color:var(--secondary-text-color);font-size:.84rem}.incident-empty strong{color:var(--primary-text-color)}.incident-notice,.incident-error{margin:0 0 10px;padding:9px 11px;border-radius:9px;font-size:.8rem}.incident-notice{background:var(--secondary-background-color);border-left:3px solid var(--success-color,#4caf50)}.incident-error{background:var(--secondary-background-color);border-left:3px solid var(--error-color,#db4437)}.incident-help{margin:11px 0 0;color:var(--secondary-text-color);font-size:.74rem;line-height:1.45}" +
       "code{max-width:100%;padding:2px 5px;border-radius:5px;background:var(--secondary-background-color);font-family:var(--code-font-family,ui-monospace,SFMono-Regular,Consolas,monospace);font-size:.86em;overflow-wrap:anywhere}" +
       "details{margin-top:11px;padding-top:9px;border-top:1px solid var(--divider-color)}summary{width:max-content;color:var(--secondary-text-color);font-size:.78rem;cursor:pointer}.metadata{display:grid;gap:6px;margin-top:9px}.metadata-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:baseline;font-size:.78rem}.metadata-row>span{color:var(--secondary-text-color)}" +
       ".explain-panel{margin:0 0 28px;padding:20px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none);scroll-margin-top:16px}" +

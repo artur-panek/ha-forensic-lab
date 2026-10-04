@@ -51,6 +51,7 @@ The admin-only WebSocket API exposes:
 
 - ha_forensic_lab/incidents/list
 - ha_forensic_lab/incidents/get
+- ha_forensic_lab/incidents/review
 - ha_forensic_lab/incidents/create
 - ha_forensic_lab/incidents/delete
 - ha_forensic_lab/incidents/export
@@ -58,3 +59,16 @@ The admin-only WebSocket API exposes:
 Export is sanitized by default and has no raw mode in v0.1.
 
 See [Sanitized incident export](export.md).
+
+
+## Reviewing an incident
+
+A saved incident is a self-contained forensic snapshot.
+
+The Review workflow reconstructs the same deterministic context chain from the incident's frozen events rather than from the live rolling capture buffer. This means a saved incident can still be investigated:
+
+- after its original events have been evicted from the rolling buffer
+- after a Home Assistant restart
+- while the current live timeline has moved on to unrelated activity
+
+If validated structural trace evidence was frozen with the incident, Review displays that trace skeleton alongside the reconstructed context chain. If no trace was captured, context evidence remains fully reviewable.

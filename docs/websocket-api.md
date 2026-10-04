@@ -58,6 +58,20 @@ ha_forensic_lab/incidents/get
 
 Requires incident_id and returns the frozen normalized events.
 
+### Review
+
+~~~text
+ha_forensic_lab/incidents/review
+~~~
+
+Requires incident_id.
+
+Optional:
+
+- max_events, 1–200, default 100
+
+Review reconstructs the deterministic context chain from the incident's frozen event snapshot and returns its frozen safe trace evidence when present. It does not depend on the current rolling buffer.
+
 ### Create
 
 ~~~text

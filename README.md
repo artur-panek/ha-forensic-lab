@@ -60,6 +60,7 @@ Implemented in the development stack:
 - **Save incident** directly from a state-change event
 - durable saved incidents in a separate private store
 - saved-incident list and management in the sidebar
+- durable saved-incident Review that reconstructs causality without the live buffer
 - safe-profile sanitized ZIP export and download from the sidebar
 - explicit evidence gaps instead of timing guesses
 

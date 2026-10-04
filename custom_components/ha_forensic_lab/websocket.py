@@ -12,6 +12,12 @@ from .capture import ForensicCapture
 from .causality import EvidenceEdge, ForensicExplanation, explain_event
 from .const import DATA_CAPTURE, DATA_INCIDENT_STORE, DOMAIN
 from .export_bundle import ExportBundle, build_export_bundle
+from .incident_review import (
+    DEFAULT_INCIDENT_REVIEW_LIMIT,
+    MAX_INCIDENT_REVIEW_LIMIT,
+    IncidentReview,
+    review_incident,
+)
 from .incident_store import IncidentLimitReached, IncidentStore
 from .incidents import (
     DEFAULT_INCIDENT_AFTER_SECONDS,
@@ -38,6 +44,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_explain)
     websocket_api.async_register_command(hass, websocket_incidents_list)
     websocket_api.async_register_command(hass, websocket_incidents_get)
+    websocket_api.async_register_command(hass, websocket_incidents_review)
     websocket_api.async_register_command(hass, websocket_incidents_create)
     websocket_api.async_register_command(hass, websocket_incidents_delete)
     websocket_api.async_register_command(hass, websocket_incidents_export)
@@ -185,6 +192,50 @@ def websocket_incidents_get(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
+        probatio.Required("type"): "ha_forensic_lab/incidents/review",
+        probatio.Required("incident_id"): str,
+        probatio.Optional(
+            "max_events",
+            default=DEFAULT_INCIDENT_REVIEW_LIMIT,
+        ): probatio.All(
+            int,
+            probatio.Range(min=1, max=MAX_INCIDENT_REVIEW_LIMIT),
+        ),
+    }
+)
+@callback
+def websocket_incidents_review(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Reconstruct causality from one durable saved incident."""
+    store = _incident_store_or_error(hass, connection, msg["id"])
+    if store is None:
+        return
+
+    incident = store.get(msg["incident_id"])
+    if incident is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Saved forensic incident not found",
+        )
+        return
+
+    review = review_incident(
+        incident,
+        max_events=msg["max_events"],
+    )
+    connection.send_result(
+        msg["id"],
+        _incident_review_to_dict(incident, review),
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
         probatio.Required("type"): "ha_forensic_lab/incidents/create",
         probatio.Required("target_event_id"): str,
         probatio.Optional(
@@ -318,6 +369,17 @@ async def websocket_incidents_export(
 
     bundle = await hass.async_add_executor_job(build_export_bundle, incident)
     connection.send_result(msg["id"], _export_bundle_to_dict(bundle))
+
+
+def _incident_review_to_dict(
+    incident: Incident,
+    review: IncidentReview,
+) -> dict[str, Any]:
+    return {
+        "incident": _incident_to_dict(incident, include_events=False),
+        "explanation": _explanation_to_dict(review.explanation),
+        "trace_evidence": trace_evidence_to_dict(review.trace_evidence),
+    }
 
 
 def _export_bundle_to_dict(bundle: ExportBundle) -> dict[str, Any]:
