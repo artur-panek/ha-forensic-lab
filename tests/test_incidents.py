@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tests.support import load_module
 
 models = load_module("models")
@@ -92,3 +94,42 @@ def test_create_incident_rejects_title_over_limit() -> None:
         assert "title exceeds" in str(error)
     else:
         raise AssertionError("Expected ValueError")
+
+
+def test_busy_window_can_be_previewed_then_narrowed_without_truncation():
+    events = tuple(_event(f"e{index}", index / 10) for index in range(1585))
+    preview = incidents.select_incident_window(events, "e1400")
+    assert len(preview.events) == 1585
+    with pytest.raises(incidents.IncidentTooLarge, match="1585 events"):
+        incidents.create_incident(events, "e1400")
+
+    preview = incidents.select_incident_window(
+        events, "e1400", before_seconds=30, after_seconds=10
+    )
+    saved = incidents.create_incident(
+        events, "e1400", before_seconds=30, after_seconds=10
+    )
+    assert saved.events == preview.events
+    assert saved.event_count == 401
+    assert (saved.window_start, saved.window_end) == (110, 150)
+    assert (preview.window_start, preview.window_end) == (110, 150)
+
+
+def test_zero_width_window_keeps_all_events_at_the_target_timestamp():
+    events = tuple(_event(f"e{index}", 100) for index in range(501))
+    preview = incidents.select_incident_window(
+        events, "e1", before_seconds=0, after_seconds=0
+    )
+    assert preview.events == events
+    with pytest.raises(incidents.IncidentTooLarge):
+        incidents.create_incident(
+            events, "e1", before_seconds=0, after_seconds=0
+        )
+
+
+@pytest.mark.parametrize("side", ["before_seconds", "after_seconds"])
+@pytest.mark.parametrize("value", [-1, 3601, float("nan"), float("inf")])
+def test_preview_and_create_reject_invalid_window_values(side, value):
+    for operation in (incidents.select_incident_window, incidents.create_incident):
+        with pytest.raises(ValueError):
+            operation((_event("e1", 100),), "e1", **{side: value})

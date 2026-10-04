@@ -36,8 +36,9 @@ testing must use an exact-SHA CI artifact; `main` changes as fixes are merged.
   triggers and script starts. Filter by entity or event kind.
 - **Explain this change:** inspect the selected event's context chain, evidence
   gaps and available automation/script trace steps.
-- **Save incident:** freeze the events currently available around the selected
-  event, with structural trace evidence when available.
+- **Save incident:** choose the seconds before/after the selected event, preview
+  the event count, then freeze the window with structural trace evidence when
+  available. Narrow busy windows to fit the 500-event limit.
 - **Review:** reopen a saved incident after the live buffer has moved on.
 - **Export:** download a sanitized ZIP with a SHA-256 checksum.
 

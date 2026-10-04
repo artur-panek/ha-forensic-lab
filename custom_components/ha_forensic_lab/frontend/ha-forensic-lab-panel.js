@@ -33,6 +33,8 @@ class HAForensicLabPanel extends HTMLElement {
     this._incidentsLoaded = false;
     this._incidentsLoading = false;
     this._incidentsError = null;
+    this._incidentDraft = null;
+    this._incidentPreviewRequestId = 0;
     this._savingEventId = null;
     this._exportingIncidentId = null;
     this._deletingIncidentId = null;
@@ -213,14 +215,148 @@ class HAForensicLabPanel extends HTMLElement {
     };
   }
 
-  async _saveIncident(eventId) {
+  async _openIncidentDraft(eventId) {
     if (!this._hass || !eventId || this._savingEventId) {
       return;
     }
 
+    const target =
+      (this._data.events || []).find((event) => event.event_id === eventId) ||
+      (this._explanation?.events || []).find((event) => event.event_id === eventId);
+    this._incidentDraft = {
+      eventId,
+      targetLabel: target
+        ? (target.entity_id || this._kindLabel(target.kind)) +
+          " · " + this._formatTime(target.timestamp)
+        : eventId,
+      beforeSeconds: "300",
+      afterSeconds: "60",
+      title: "",
+      traceEvidence: this._traceEvidenceForIncident(eventId),
+      preview: null,
+      previewLoading: false,
+      error: null,
+    };
+    this._incidentNotice = null;
+    this._render();
+    this.shadowRoot.getElementById("incident-draft")?.scrollIntoView({
+      behavior: "smooth", block: "start",
+    });
+    this.shadowRoot.getElementById("incident-title")?.focus({ preventScroll: true });
+    await this._previewIncident();
+  }
+
+  _closeIncidentDraft() {
+    if (this._savingEventId) {
+      return;
+    }
+    this._incidentDraft = null;
+    this._incidentPreviewRequestId += 1;
+    this._render();
+  }
+
+  _updateIncidentDraft(field, value) {
+    const draft = this._incidentDraft;
+    if (!draft || this._savingEventId) {
+      return;
+    }
+    draft[field] = value;
+    if (field !== "title") {
+      this._incidentPreviewRequestId += 1;
+      draft.preview = null;
+      draft.previewLoading = false;
+      draft.error = null;
+      this._updateIncidentDraftStatus();
+    }
+  }
+
+  async _previewIncident() {
+    const draft = this._incidentDraft;
+    if (!this._hass || !draft || this._savingEventId) {
+      return;
+    }
+    const requestId = ++this._incidentPreviewRequestId;
+    draft.preview = null;
+    draft.error = null;
+    const before = Number(draft.beforeSeconds);
+    const after = Number(draft.afterSeconds);
+    if (
+      draft.beforeSeconds.trim() === "" || draft.afterSeconds.trim() === "" ||
+      !Number.isFinite(before) || !Number.isFinite(after) ||
+      before < 0 || after < 0 || before > 3600 || after > 3600
+    ) {
+      draft.previewLoading = false;
+      draft.error = "Enter a time from 0 to 3600 seconds on each side.";
+      this._updateIncidentDraftStatus();
+      return;
+    }
+    draft.previewLoading = true;
+    this._updateIncidentDraftStatus();
+    try {
+      const preview = await this._hass.callWS({
+        type: "ha_forensic_lab/incidents/preview",
+        target_event_id: draft.eventId,
+        before_seconds: before,
+        after_seconds: after,
+      });
+      if (
+        this._incidentDraft === draft && requestId === this._incidentPreviewRequestId
+      ) {
+        draft.preview = preview;
+      }
+    } catch (error) {
+      if (
+        this._incidentDraft === draft && requestId === this._incidentPreviewRequestId
+      ) {
+        draft.error = error?.message
+          ? String(error.message) : "Unable to preview incident";
+      }
+    } finally {
+      if (
+        this._incidentDraft === draft && requestId === this._incidentPreviewRequestId
+      ) {
+        draft.previewLoading = false;
+        this._updateIncidentDraftStatus();
+      }
+    }
+  }
+
+  _incidentPreviewText() {
+    const draft = this._incidentDraft;
+    if (!draft) return "";
+    if (draft.error) return draft.error;
+    if (draft.previewLoading) return "Counting events in this window…";
+    if (!draft.preview) return "Preview this window to check its event count before saving.";
+    const preview = draft.preview;
+    return `${preview.event_count} / ${preview.max_events} events` +
+      (preview.can_save
+        ? " · Ready to save. The count is checked again when saving."
+        : " · Shorten the before/after times, then preview again. No events will be silently discarded.");
+  }
+
+  _updateIncidentDraftStatus() {
+    // Updating just the status preserves focus and partially typed field values.
+    const status = this.shadowRoot.getElementById("incident-preview-status");
+    if (status) status.textContent = this._incidentPreviewText();
+    const save = this.shadowRoot.getElementById("confirm-save-incident");
+    if (save) {
+      save.disabled = Boolean(this._savingEventId) || !this._incidentDraft?.preview?.can_save;
+    }
+    const preview = this.shadowRoot.getElementById("preview-incident");
+    if (preview) {
+      preview.disabled = Boolean(this._savingEventId) || Boolean(this._incidentDraft?.previewLoading);
+    }
+  }
+
+  async _saveIncident() {
+    const draft = this._incidentDraft;
+    if (!this._hass || !draft?.preview?.can_save || this._savingEventId) {
+      return;
+    }
+    const eventId = draft.eventId;
     this._savingEventId = eventId;
     this._incidentNotice = null;
-    this._incidentsError = null;
+    draft.error = null;
     this._render();
 
     let saved = false;
@@ -228,8 +364,11 @@ class HAForensicLabPanel extends HTMLElement {
       const request = {
         type: "ha_forensic_lab/incidents/create",
         target_event_id: eventId,
+        before_seconds: Number(draft.beforeSeconds),
+        after_seconds: Number(draft.afterSeconds),
+        title: draft.title,
       };
-      const traceEvidence = this._traceEvidenceForIncident(eventId);
+      const traceEvidence = draft.traceEvidence;
       if (traceEvidence) {
         request.trace_evidence = traceEvidence;
       }
@@ -244,8 +383,10 @@ class HAForensicLabPanel extends HTMLElement {
         String(incident.title || "incident") +
         ".";
       saved = true;
+      this._incidentDraft = null;
     } catch (error) {
-      this._incidentsError =
+      draft.preview = null;
+      draft.error =
         error && error.message
           ? String(error.message)
           : "Unable to save incident";
@@ -1204,6 +1345,7 @@ class HAForensicLabPanel extends HTMLElement {
       return (
         '<section class="incidents-panel">' +
         '<div class="section-heading"><div><span class="section-kicker">Frozen evidence</span><h2>Saved incidents</h2></div></div>' +
+        this._incidentDraftView() +
         '<div class="incident-empty"><div class="spinner" aria-hidden="true"></div><span>Loading saved incidents…</span></div>' +
         "</section>"
       );
@@ -1226,10 +1368,40 @@ class HAForensicLabPanel extends HTMLElement {
       ">Refresh</button></div></div>" +
       notice +
       error +
+      this._incidentDraftView() +
       cards +
       '<p class="incident-help">Exports pseudonymize identifiers and redact free text. Review before sharing.</p>' +
       "</section>"
     );
+  }
+
+  _incidentDraftView() {
+    const draft = this._incidentDraft;
+    if (!draft) return "";
+    const disabled = this._savingEventId ? " disabled" : "";
+    return `
+      <form id="incident-draft" class="incident-draft">
+        <div class="incident-draft-heading"><strong>Save incident</strong>
+          <span>${this._escape(draft.targetLabel)}</span></div>
+        <label class="field">Title (optional)
+          <input id="incident-title" maxlength="120" value="${this._escape(draft.title)}" placeholder="Automatic title if left blank"${disabled}>
+        </label>
+        <div class="incident-window-fields">
+          <label class="field">Seconds before
+            <input id="incident-before" type="number" min="0" max="3600" step="any" required value="${this._escape(draft.beforeSeconds)}"${disabled}>
+          </label>
+          <label class="field">Seconds after
+            <input id="incident-after" type="number" min="0" max="3600" step="any" required value="${this._escape(draft.afterSeconds)}"${disabled}>
+          </label>
+        </div>
+        <p id="incident-preview-status" class="incident-help" role="status">${this._escape(this._incidentPreviewText())}</p>
+        <div class="actions">
+          <button id="preview-incident" class="button" type="button"${this._savingEventId || draft.previewLoading ? " disabled" : ""}>Preview window</button>
+          <button id="confirm-save-incident" class="button primary" type="submit"${this._savingEventId || !draft.preview?.can_save ? " disabled" : ""}>${this._savingEventId ? "Saving…" : "Save incident"}</button>
+          <button id="cancel-incident" class="button quiet" type="button"${disabled}>Cancel</button>
+        </div>
+        <p class="incident-help">Counts all retained events in this window, regardless of timeline filters. Saving does not wait for future events.${draft.traceEvidence ? " Matching structural trace evidence will also be saved." : ""}</p>
+      </form>`;
   }
 
   _incidentCard(incident) {
@@ -1713,10 +1885,33 @@ class HAForensicLabPanel extends HTMLElement {
         button.addEventListener("click", () => {
           const eventId = button.dataset.saveEventId;
           if (eventId) {
-            void this._saveIncident(eventId);
+            void this._openIncidentDraft(eventId);
           }
         });
       });
+
+    const incidentForm = this.shadowRoot.getElementById("incident-draft");
+    if (incidentForm) {
+      incidentForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void this._saveIncident();
+      });
+      for (const [id, field] of [
+        ["incident-title", "title"],
+        ["incident-before", "beforeSeconds"],
+        ["incident-after", "afterSeconds"],
+      ]) {
+        this.shadowRoot.getElementById(id).addEventListener("input", (event) => {
+          this._updateIncidentDraft(field, event.target.value);
+        });
+      }
+      this.shadowRoot.getElementById("preview-incident").addEventListener("click", () => {
+        void this._previewIncident();
+      });
+      this.shadowRoot.getElementById("cancel-incident").addEventListener("click", () => {
+        this._closeIncidentDraft();
+      });
+    }
 
     this.shadowRoot
       .querySelectorAll(".review-incident-button")

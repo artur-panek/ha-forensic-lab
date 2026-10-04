@@ -75,6 +75,21 @@ Optional:
 
 Review reconstructs the deterministic context chain from the incident's frozen event snapshot and returns its frozen safe trace evidence when present. It does not depend on the current rolling buffer.
 
+### Preview
+
+~~~text
+ha_forensic_lab/incidents/preview
+~~~
+
+Requires `target_event_id`. Accepts `before_seconds` (default 300) and
+`after_seconds` (default 60), each from 0 to 3600 inclusive.
+
+Returns `event_count`, `max_events` (500), `can_save`, `window_start` and
+`window_end`. It counts the complete window in the current rolling buffer,
+independently of timeline display filters. Oversized windows are counted without
+truncation. This read-only command does not persist or reserve the selection;
+the target must still be retained when creating the incident.
+
 ### Create
 
 ~~~text
@@ -85,11 +100,13 @@ Requires target_event_id.
 
 Optional:
 
-- before_seconds, default 300, maximum 3600
-- after_seconds, default 60, maximum 3600
+- before_seconds, default 300, range 0–3600
+- after_seconds, default 60, range 0–3600
 - title
 
-Incident creation fails rather than silently truncating when the selected window exceeds the incident event bound.
+Incident creation rechecks the current buffer and fails rather than silently
+truncating when the selected window exceeds the incident event bound. A prior
+preview does not bypass this check.
 
 ### Delete
 
