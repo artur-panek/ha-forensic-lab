@@ -39,6 +39,12 @@ First alpha candidate.
   identifiers and redact free text
 - diagnostics are aggregate-only and exclude forensic identifiers/payloads
 
+### Fixed during candidate audit
+
+- reject arbitrary token-shaped text in trace structural fields
+- preserve numeric Home Assistant choose-branch indexes, including branch zero
+- pseudonymize user-defined service names in safe incident exports
+
 ### Known alpha limitations
 
 See [docs/known-limitations.md](docs/known-limitations.md).

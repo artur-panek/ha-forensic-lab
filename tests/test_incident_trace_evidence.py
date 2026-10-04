@@ -215,3 +215,23 @@ def test_incident_without_trace_evidence_remains_supported() -> None:
 
     assert restored == (incident,)
     assert sanitized["incident"]["trace_evidence"] is None
+
+
+def test_safe_zip_hides_custom_service_identity_and_keeps_branch_zero() -> None:
+    from dataclasses import replace
+
+    original = _incident()
+    projection = _trace_projection()
+    projection["steps"][1]["choice"] = 0
+    evidence = trace_evidence.normalize_trace_evidence(projection)
+    service = replace(
+        original.events[0], kind=models.ForensicEventKind.CALL_SERVICE,
+        domain="script", service="SECRET_SCRIPT_NAME", entity_id=None,
+    )
+    incident = replace(original, events=(service,), trace_evidence=evidence)
+    bundle = export_bundle.build_export_bundle(incident)
+    with zipfile.ZipFile(io.BytesIO(base64.b64decode(bundle.data))) as archive:
+        contents = b"\n".join(archive.read(name) for name in archive.namelist())
+        exported = json.loads(archive.read("incident.json"))
+    assert b"SECRET_SCRIPT_NAME" not in contents
+    assert exported["incident"]["trace_evidence"]["steps"][1]["choice"] == "0"

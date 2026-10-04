@@ -10,7 +10,7 @@ from .models import ForensicEvent
 from .trace_evidence import TraceEvidence, TraceReference, TraceStepEvidence
 
 SANITIZER_PROFILE = "safe"
-SANITIZER_VERSION = 1
+SANITIZER_VERSION = 2
 REDACTED = "[redacted]"
 
 _SAFE_STATES = frozenset(
@@ -51,6 +51,7 @@ class SanitizationContext:
     events: _AliasMap = field(default_factory=lambda: _AliasMap("evt"))
     contexts: _AliasMap = field(default_factory=lambda: _AliasMap("ctx"))
     entities: _AliasMap = field(default_factory=lambda: _AliasMap("entity"))
+    services: _AliasMap = field(default_factory=lambda: _AliasMap("service"))
     runs: _AliasMap = field(default_factory=lambda: _AliasMap("run"))
 
     def entity_id(self, value: str | None) -> str | None:
@@ -122,7 +123,7 @@ def _sanitize_event(
         "user_id": None,
         "entity_id": context.entity_id(event.entity_id),
         "domain": event.domain,
-        "service": event.service,
+        "service": _sanitize_service(event, context),
         "name": REDACTED if event.name is not None else None,
         "source": REDACTED if event.source is not None else None,
         "target_entity_ids": [
@@ -191,3 +192,14 @@ def _sanitize_state(value: str | None) -> str | None:
         return lowered
 
     return REDACTED
+
+
+def _sanitize_service(event: ForensicEvent, context: SanitizationContext) -> str | None:
+    """Custom service names can contain user-defined script/notification names."""
+    if event.service is None:
+        return None
+    if event.service in {"turn_on", "turn_off", "toggle", "reload"}:
+        return event.service
+    if event.domain == "script":
+        return context.entity_id(f"script.{event.service}")
+    return context.services.alias(f"{event.domain}.{event.service}")

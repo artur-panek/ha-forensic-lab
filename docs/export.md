@@ -74,3 +74,8 @@ Export operates only on a saved incident, so it inherits saved-incident bounds:
 - no trace variables in the current implementation
 
 The sanitizer should remain a separately tested module as richer evidence types are added.
+
+Custom service names (including direct script calls and named notification
+services) are pseudonymized. Only generic turn_on/turn_off/toggle/reload service
+names remain readable. Trace status, branch choices and path segments use a
+structural vocabulary allowlist; arbitrary identifier-shaped text is not evidence.
