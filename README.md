@@ -4,160 +4,70 @@
 
 <h1 align="center">HA Forensic Lab</h1>
 
-<p align="center"><strong>Runtime forensics and incident analysis for Home Assistant.</strong></p>
+A Home Assistant custom integration for inspecting the events and context links
+around an entity change.
 
 By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/ha-forensic-lab/)
 
-HA Forensic Lab is an experimental Home Assistant custom integration for reconstructing **what happened, in what order, and why**.
-
-The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
-
 > [!IMPORTANT]
-> **0.1.0-alpha.1 is an unreleased alpha candidate.** Repository CI, packaging and smoke tooling do not by themselves prove real-instance compatibility. The first public pre-release must not be tagged until the real Home Assistant alpha checklist has passed.
+> **0.1.0-alpha.1 is an unreleased candidate.** The real Home Assistant
+> [release checklist](docs/alpha-release-checklist.md) has not been completed.
+> A green CI run is not approval to tag a release.
 
-## The problem
+## Install for testing
 
-Home Assistant already exposes history, logbook entries and automation traces, but debugging an incident often means jumping between several views while already knowing which automation to inspect.
-
-HA Forensic Lab is intended to start from the incident instead:
-
-> Why did this entity change at 19:42?
-
-and reconstruct the surrounding chain of states, service calls, automations, scripts and Home Assistant contexts.
-
-## Evidence model
-
-Every relationship shown by HA Forensic Lab must carry an evidence class:
-
-- **Confirmed**: backed by Home Assistant context IDs, parent contexts, trace data or another direct runtime link.
-- **Correlated**: nearby in time or otherwise associated, but not proven to be causal.
-
-The UI must make those classes visually distinct.
-
-## v0.1 alpha candidate
-
-Implemented on `main`:
-
-- bounded normalized runtime capture
-- configurable event-type/entity/domain capture filters
-- configurable rolling capacity and persistence cadence
-- private atomic rolling snapshot persistence
-- searchable admin-only runtime timeline
-- deterministic context-based **Explain this change**
-- privacy-reduced automation/script trace enrichment
-- durable saved incidents with Review independent from the live rolling buffer
-- safe-only sanitized ZIP incident export
-- privacy-safe aggregate diagnostics and Recorder health
-- production waveform/lens visual identity
-- read-only real-instance smoke client
-- deterministic alpha packaging and tag/version release contract
-
-Capture filters are applied before rolling retention and persistence, including to
-a restored rolling snapshot after an options change. See
-[`docs/capture-settings.md`](docs/capture-settings.md).
-
-Saved incidents are bounded to 50 records and 500 frozen events per record.
-
-Safe export preserves diagnostic structure but pseudonymizes identifiers,
-removes user IDs and absolute timestamps, redacts free text and only retains a
-small allowlist of generic state values. v0.1 has no raw-export mode.
-
-Still intentionally outside the first alpha:
-
-- timing-only correlated evidence
-- anomaly detection
-- AI root-cause summaries
-
-## Installation
-
-The project is not yet in the default HACS catalogue.
-
-For development testing, add this repository to HACS as **Integration** and
-install the default branch (`main`). HACS supports this before the first release.
-The code is an **unreleased candidate**, not a validated public alpha.
+Requires Home Assistant **2026.9.4 or newer** and an administrator account.
+The repository is available as a HACS custom repository, outside the default
+catalogue.
 
 [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=artur-panek&repository=ha-forensic-lab&category=integration)
 
-Requires Home Assistant **2026.9.4 or newer** and an administrator account.
-For the release-validation matrix, use the exact-SHA CI ZIP and record its SHA;
-a HACS `main` install follows a moving development branch.
+1. Add `artur-panek/ha-forensic-lab` in HACS with type **Integration**.
+2. Download `main` and restart Home Assistant.
+3. Add **HA Forensic Lab** in **Settings → Devices & services**.
+4. Open **HA Forensic Lab** in the sidebar.
 
-See [Installation](docs/installation.md).
+See [installation](docs/installation.md) for manual ZIP installation. Release
+testing must use an exact-SHA CI artifact; `main` changes as fixes are merged.
 
-## Alpha testing and release gate
+## Investigate a change
 
-Repository CI is not treated as proof of real-instance compatibility.
+- **Timeline:** refresh the captured state changes, service calls, automation
+  triggers and script starts. Filter by entity or event kind.
+- **Explain this change:** inspect the selected event's context chain, evidence
+  gaps and available automation/script trace steps.
+- **Save incident:** freeze the events currently available around the selected
+  event, with structural trace evidence when available.
+- **Review:** reopen a saved incident after the live buffer has moved on.
+- **Export:** download a sanitized ZIP with a SHA-256 checksum.
 
-The test matrix, read-only smoke client and release gate are documented in:
+Parent-context links identify relationships between HA contexts. Events sharing
+one context are shown in captured order; that order does not prove that one
+caused the next. Missing evidence stays explicit. There are no timing-only
+causal links or AI root-cause claims.
 
-- [Alpha testing](docs/alpha-testing.md)
-- [Alpha release checklist](docs/alpha-release-checklist.md)
-- [Known limitations](docs/known-limitations.md)
-- [Release process](docs/releasing.md)
-- [Changelog](CHANGELOG.md)
+## Retention and privacy
 
-Read-only smoke example:
+The rolling buffer defaults to **2,048 events**, configurable from 256 to 8,192.
+Snapshots are requested every 5–60 seconds while data changes (default 10).
+A hard crash can lose events since the last successful snapshot.
 
-~~~bash
-HA_URL="https://home.example" \
-HA_TOKEN="<long-lived-access-token>" \
-node scripts/alpha-smoke.mjs
-~~~
+Saved incidents use separate storage, with limits of **50 incidents** and
+**500 events per incident**. Changing capture filters does not rewrite them.
 
-The smoke client does not call services or modify Home Assistant state.
+The panel and WebSocket API require an administrator. Local storage contains
+identifiers and state strings, but omits raw event payloads, complete service
+data and trace variables. Export removes user IDs and absolute timestamps,
+pseudonymizes identifiers and redacts free text. Domains, relative timing and
+execution structure remain visible; review a bundle before sharing it.
 
-## Persistence caveat
+## Documentation
 
-Rolling persistence is not a write-ahead log. A hard process or host crash can
-lose the newest rolling events since the most recent completed snapshot,
-normally roughly the configured persistence interval. Clean unloads flush
-immediately.
+- [Capture settings](docs/capture-settings.md) and [known limitations](docs/known-limitations.md)
+- [Architecture](docs/architecture.md) and [implemented v0.1 scope](docs/v0.1-scope.md)
+- [Evidence rules](docs/causality.md) and [WebSocket API](docs/websocket-api.md)
+- [Saved incidents](docs/incidents.md), [trace evidence](docs/trace-enrichment.md) and [export format](docs/export.md)
+- [Alpha testing](docs/alpha-testing.md), [release process](docs/releasing.md) and [HACS status](docs/hacs-readiness.md)
+- [Contributing](CONTRIBUTING.md), [security](SECURITY.md) and [changelog](CHANGELOG.md)
 
-Saved incidents are explicit user actions and are written immediately.
-
-## Security and privacy
-
-The panel and custom WebSocket API are admin-only.
-
-Persistent rolling snapshots and saved incidents use Home Assistant private
-storage mode. Raw event payloads and complete service data are not retained.
-
-Full Home Assistant traces are queried live through the admin-only trace
-WebSocket API and immediately reduced to structural paths/outcomes in panel
-memory. Config, blueprint inputs, variables, error text and arbitrary result
-payloads are not stored.
-
-When a user freezes trace evidence with an incident, the backend validates the
-reduced projection again against a strict allowlist. Sanitized exports
-pseudonymize automation/script, run, context and entity identifiers.
-
-Sanitized incident export is safe-only in v0.1. The sanitizer is separately
-tested and export ZIPs include a SHA-256 digest.
-
-## Technical documentation
-
-For the technical design, see [architecture](docs/architecture.md), the
-[v0.1 scope](docs/v0.1-scope.md) and the [roadmap](docs/roadmap.md).
-
-## Development
-
-Validation includes:
-
-- Home Assistant hassfest
-- HACS repository validation
-- Ruff
-- Python bytecode compilation
-- frontend JavaScript syntax checks
-- trace projection tests
-- pytest
-- release packaging contract tests
-
-## Branding
-
-The production mark combines a runtime waveform, trace nodes and a forensic
-lens. Source artwork and palette guidance live in
-[`assets/brand/`](assets/brand/).
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+MIT licensed. See [LICENSE](LICENSE). Brand assets are in [assets/brand](assets/brand/).

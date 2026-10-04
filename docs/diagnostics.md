@@ -1,113 +1,46 @@
-# Runtime diagnostics and performance counters
+# Runtime diagnostics
 
-HA Forensic Lab measures its own recorder overhead using aggregate counters only.
+Diagnostics report aggregate counts and timings through HA's config-entry
+download and the admin-only `ha_forensic_lab/diagnostics` WebSocket command.
+The sidebar's Recorder health section uses the same payload.
 
-The diagnostics surface exists for two reasons:
+## Capture
 
-1. alpha testers can report useful performance evidence
-2. we can evaluate whether the recorder materially affects Home Assistant Core
+Counters cover observed/normalized/retained events, evictions, filtered service
+targets and drops by policy reason. Callback count, average and maximum duration
+measure the synchronous path from normalization through filtering, deque append
+and save scheduling, using a monotonic timer.
 
-## Capture counters
+## Rolling persistence
 
-The capture callback records:
+| Field | Meaning |
+| --- | --- |
+| `load_count`, `restored_events` | Loads returning normally and events decoded by the most recent load |
+| `load_average_ms`, `load_max_ms` | Load-call timing |
+| `dirty_notifications`, `scheduled_writes` | Buffer changes and scheduled save timers |
+| `completed_writes` | `Store.async_save` calls that returned without raising |
+| `failed_writes` | Exceptions raised by `Store.async_save` |
+| `flush_calls` | Explicit flush requests |
+| `write_average_ms`, `write_max_ms` | Save-call timing |
+| `last_snapshot_events` | Event count in the last snapshot whose save call returned normally |
+| `pending_save` | A save timer is scheduled; this does not indicate an active filesystem write |
+| `dirty_generation`, `persisted_generation` | Buffer revision and revision last acknowledged by the Store helper |
 
-- observed events
-- normalized events
-- normalization drops
-- retained events
-- rolling-buffer evictions
-- individually filtered service targets
-- drops by policy reason
-- callback count
-- average callback duration
-- maximum callback duration
+HA 2026.9.4 logs some disk/serialization failures without raising them. These
+counters therefore do **not** verify disk durability, and zero `failed_writes`
+does not prove storage is healthy. Check HA storage logs and verify evidence
+after restart during alpha testing. Saved-incident actions separately read back
+their data before acknowledging success.
 
-Timing uses a monotonic high-resolution timer around the full synchronous
-capture path:
+## Privacy
 
-~~~text
-event bus callback
-→ normalization
-→ capture policy
-→ bounded deque append
-→ rolling-save scheduling
-~~~
+Saved-incident diagnostics include only the number of incidents, frozen events
+and incidents with trace evidence. Capture configuration includes counts of
+excluded entities/domains, not their values.
 
-The timer does not store entity, event or context identifiers.
+The payload excludes entity, context, event, user and incident IDs; titles;
+state values; service targets; and trace data. Tests verify that seeded private
+identifiers do not appear in the serialized output.
 
-## Persistence counters
-
-Rolling storage reports:
-
-- successful snapshot loads
-- restored event count
-- average/maximum load duration
-- dirty notifications
-- scheduled writes
-- completed writes
-- failed writes
-- explicit flush calls
-- average/maximum write duration
-- event count in the last completed snapshot
-- pending-write state
-- dirty and persisted generation counters
-
-A failed filesystem write is counted and then re-raised. Diagnostics must never
-convert a storage failure into silent success.
-
-## Saved incident counters
-
-Only aggregate saved-case information is exposed:
-
-- incident count
-- total frozen event count
-- number of incidents containing frozen trace evidence
-
-Incident IDs, titles, timestamps and evidence are not included.
-
-## Privacy contract
-
-The diagnostics payload intentionally excludes:
-
-- entity IDs
-- excluded entity/domain values
-- event IDs
-- context IDs
-- user IDs
-- incident IDs and titles
-- state values
-- service targets
-- trace data
-
-Capture configuration reports **counts** of excluded entities/domains, not the
-values themselves.
-
-Tests include explicit secret identifiers and assert they do not appear in the
-serialized diagnostics payload.
-
-## Access
-
-Diagnostics are available in two admin-only forms:
-
-- Home Assistant's native config-entry diagnostics download
-- the internal WebSocket command `ha_forensic_lab/diagnostics`
-
-The WebSocket command exists so the Forensic Lab panel can show a small recorder
-health view without gaining access to forensic payload internals.
-
-
-## Sidebar recorder health
-
-The sidebar consumes the same admin-only aggregate diagnostics command.
-
-It intentionally shows only a compact operational summary:
-
-- average capture callback duration
-- maximum capture callback duration
-- retained vs dropped events
-- rolling-buffer utilization
-- persistence pending/failure status and completed-write count
-
-The view does not set hard performance thresholds in v0.1. Alpha data should
-inform any future warning levels instead of treating an arbitrary millisecond
-number as unhealthy.
+Recorder health shows these counts and timings without fixed performance
+thresholds. Alpha reports should include observations from the tested instance.

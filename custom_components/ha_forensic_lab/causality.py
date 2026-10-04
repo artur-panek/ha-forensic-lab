@@ -10,25 +10,8 @@ from collections import defaultdict
 from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Protocol
 
-
-class EventKindLike(Protocol):
-    """Minimal enum-like kind shape used by the causality layer."""
-
-    @property
-    def value(self) -> str:
-        """Return the serialized event kind."""
-
-
-class ForensicEventLike(Protocol):
-    """Minimal forensic event shape required for context reconstruction."""
-
-    event_id: str
-    kind: EventKindLike
-    timestamp: float
-    context_id: str | None
-    parent_context_id: str | None
+from .models import ForensicEvent
 
 
 class EvidenceClass(StrEnum):
@@ -61,7 +44,7 @@ class ForensicExplanation:
     """Context-linked evidence around one target event."""
 
     target_event_id: str
-    events: tuple[ForensicEventLike, ...]
+    events: tuple[ForensicEvent, ...]
     edges: tuple[EvidenceEdge, ...]
     gaps: tuple[str, ...]
 
@@ -72,7 +55,7 @@ class ForensicExplanation:
 
 
 def explain_event(
-    events: Iterable[ForensicEventLike],
+    events: Iterable[ForensicEvent],
     target_event_id: str,
     *,
     max_events: int = 50,
@@ -112,7 +95,7 @@ def explain_event(
             gaps=("target_context_missing",),
         )
 
-    by_context: dict[str, list[tuple[int, ForensicEventLike]]] = defaultdict(list)
+    by_context: dict[str, list[tuple[int, ForensicEvent]]] = defaultdict(list)
     for index, event in enumerate(event_list[: target_index + 1]):
         if event.context_id is not None:
             by_context[event.context_id].append((index, event))
@@ -247,7 +230,7 @@ def explain_event(
 
 
 def _parent_context_for_group(
-    context_events: list[tuple[int, ForensicEventLike]],
+    context_events: list[tuple[int, ForensicEvent]],
 ) -> str | None:
     """Return the most recent explicit parent context for a context group."""
     for _, event in reversed(context_events):
@@ -257,7 +240,7 @@ def _parent_context_for_group(
 
 
 def _link_same_context_sequence(
-    context_events: list[tuple[int, ForensicEventLike]],
+    context_events: list[tuple[int, ForensicEvent]],
     *,
     edges: list[EvidenceEdge],
     edge_keys: set[tuple[str, str, EvidenceType]],

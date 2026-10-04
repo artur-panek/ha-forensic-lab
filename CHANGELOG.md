@@ -24,7 +24,7 @@ First alpha candidate.
 - saved-incident review independent from the live rolling buffer
 - safe-only sanitized ZIP incident export with pseudonymized identifiers
 - privacy-safe aggregate diagnostics and Recorder health view
-- production HA Forensic Lab waveform/lens visual identity
+- HA Forensic Lab waveform/lens visual identity
 - read-only real-instance alpha smoke client
 - alpha test matrix, known-limitations document and explicit release gate
 
@@ -43,10 +43,18 @@ First alpha candidate.
 
 - use matching voluptuous schemas and validation exceptions on HA 2026.9.4
 - document HACS custom-repository installation before the first public release
-
 - reject arbitrary token-shaped text in trace structural fields
 - preserve numeric Home Assistant choose-branch indexes, including branch zero
 - pseudonymize user-defined service names in safe incident exports
+
+### Repository cleanup
+
+- preserve panel DOM on unrelated HA state updates
+- verify and serialize incident writes before acknowledging success
+- flush rolling capture on HA final-write shutdown
+- share pure-test imports, normalized event types and event serialization
+- separate panel styles from rendering code
+- replace proposed features and storage guarantees with current behavior
 
 ### Known alpha limitations
 

@@ -1,5 +1,8 @@
 # Alpha candidate audit — 2026-10-04
 
+Historical audit for the PR #21 consolidation. For current requirements, use
+[the release checklist](../alpha-release-checklist.md).
+
 Release status: **BLOCKED: real Home Assistant validation NOT RUN**.
 Version remains `0.1.0-alpha.1`, Unreleased. No release tag is authorized by CI
 alone. No tag was created during this audit.
@@ -86,9 +89,9 @@ Buffer utilization: NOT MEASURED
 
 No HA connector, configured HA URL/token, or HA browser session was available in
 the execution environment. Unit tests are not evidence of real HA compatibility.
-See [alpha-testing.md](alpha-testing.md) for the exact remaining manual matrix,
-[installation.md](installation.md) for installation, and
-[known-limitations.md](known-limitations.md) for documented product limits.
+See [alpha-testing.md](../alpha-testing.md) for the exact remaining manual matrix,
+[installation.md](../installation.md) for installation, and
+[known-limitations.md](../known-limitations.md) for documented product limits.
 
 After downloading the exact main artifact and unpacking its outer archive, run
 `sha256sum -c ha-forensic-lab.zip.sha256`, install only that inner ZIP, and record

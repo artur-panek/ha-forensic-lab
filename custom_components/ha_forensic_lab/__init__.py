@@ -6,7 +6,8 @@ from homeassistant.components import frontend, panel_custom
 from homeassistant.components.frontend import async_panel_exists
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_FINAL_WRITE
+from homeassistant.core import Event, HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
@@ -114,6 +115,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     domain_data[DATA_STORE] = store
 
     entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
+
+    async def flush_on_shutdown(_event: Event) -> None:
+        capture.stop()
+        await store.async_flush()
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_FINAL_WRITE, flush_on_shutdown)
+    )
 
     if not async_panel_exists(hass, PANEL_URL_PATH):
         await panel_custom.async_register_panel(

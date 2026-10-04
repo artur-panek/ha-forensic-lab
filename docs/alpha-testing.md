@@ -104,7 +104,7 @@ Use a recognizable test entity such as `input_boolean.forensic_secret_test`.
 - [ ] wait for at least one completed rolling write
 - [ ] restart Home Assistant cleanly
 - [ ] verify recent rolling evidence is restored
-- [ ] confirm Recorder health reports persistence failures = 0
+- [ ] confirm reported save errors = 0 and check HA logs for storage failures
 - [ ] confirm reducing rolling capacity results in the smaller active/persisted buffer
 
 ### Explain this change
@@ -156,7 +156,7 @@ Instead record:
 - [ ] maximum callback duration after normal use
 - [ ] observed vs retained vs dropped event counts
 - [ ] rolling-buffer utilization
-- [ ] completed/failed persistence writes
+- [ ] returned save calls / reported save errors, plus HA storage-log errors
 - [ ] Home Assistant logs for HA Forensic Lab warnings/errors
 
 These measurements should inform future thresholds after multiple alpha
@@ -187,7 +187,7 @@ Sanitized export: PASS / FAIL
 
 Callback average:
 Callback maximum:
-Persistence failures:
+Reported save errors / HA storage-log errors:
 
 Notes / reproduction:
 ~~~

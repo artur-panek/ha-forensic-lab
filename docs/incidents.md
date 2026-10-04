@@ -11,7 +11,7 @@ The default capture window is:
 - 300 seconds before the target event
 - 60 seconds after the target event
 
-Both sides can be adjusted up to 3600 seconds.
+Both sides can be adjusted up to 3600 seconds. Only events already in the buffer are frozen; saving does not wait for the future side of the window.
 
 The incident stores:
 
@@ -37,7 +37,7 @@ If a requested window contains more than 500 events, creation fails and asks the
 
 Saved incidents use a separate private Home Assistant Store file from the rolling capture snapshot.
 
-Creating or deleting an incident writes the saved-incident collection immediately because these are explicit, infrequent user actions.
+Create and delete operations are serialized. Each writes the proposed collection and reads it back before changing the visible list or acknowledging success. A failed write leaves the previous in-memory collection intact. These actions are rejected while HA is stopping, when its Store helper can defer writes.
 
 Rolling-buffer eviction does not remove already saved incidents.
 

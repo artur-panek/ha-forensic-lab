@@ -1,82 +1,41 @@
-# Live trace enrichment
+# Trace enrichment
 
-HA Forensic Lab can enrich a deterministic context explanation with a retained Home Assistant automation or script trace.
+The panel can add a retained HA automation/script trace to a context explanation.
+It calls the admin-only `trace/contexts` and `trace/get` WebSocket commands.
 
-## Why this is live-only
+## Lookup
 
-Home Assistant's full trace payload can contain:
+The panel tries the selected event's context, its parent context, then the
+explanation's remaining contexts from newest to oldest. Only automation and
+script traces are accepted. If HA has evicted the run, the context chain remains
+available and the trace is shown as unavailable.
 
-- automation/script config
-- blueprint inputs
-- changed variables
-- template error text
-- arbitrary action results
-- service/event payload data
+## Projection
 
-HA Forensic Lab therefore does **not** copy the full `trace/get` response into its rolling store or saved incidents.
+The browser reduces the raw response to:
 
-The admin-only sidebar queries Home Assistant's supported WebSocket commands:
+- domain, item ID, run ID and matched context ID;
+- allowlisted trace state and execution status;
+- the last structural step and at most 200 step paths;
+- boolean condition results and allowlisted or numeric branch choices;
+- child automation/script trace references.
 
-- `trace/contexts`
-- `trace/get`
+Config, blueprint inputs, changed variables, errors, template text, arbitrary
+results and trace timestamps are discarded. Arbitrary identifier-shaped text is
+not accepted as a structural path or status.
 
-and immediately projects the result into a small structural skeleton.
+## Saved evidence
 
-## Matching
+Saving the currently explained event may attach its reduced projection. The
+backend treats this as untrusted input and validates the fields again before
+persistence. Review uses the frozen projection without querying live HA traces.
+Saving also works without a trace, using the captured context evidence alone.
 
-The panel attempts trace lookup in this order:
+Exports pseudonymize item, run and context identifiers. Raw HA traces are never
+stored in an incident or exported. See [export policy](export.md).
 
-1. selected event context
-2. selected event parent context
-3. reconstructed explanation contexts from newest to oldest
+## Meaning
 
-Only automation and script traces are accepted.
-
-Home Assistant stores a limited number of traces per automation/script, so an older forensic event can have a valid context chain even when its richer trace has already been evicted.
-
-## Safe projection
-
-The retained panel projection contains only:
-
-- trace domain
-- item ID
-- run ID
-- matched context ID
-- trace state
-- script execution status
-- last structural step
-- up to 200 structural trace paths
-- child automation/script trace references
-- boolean condition outcomes
-- simple branch-choice tokens
-
-It deliberately drops:
-
-- config
-- blueprint inputs
-- changed variables
-- error text
-- template error text
-- arbitrary result payloads
-- trace timestamps
-
-The raw Home Assistant trace never leaves this live-only boundary.
-
-When the user explicitly saves the currently explained event as an incident, the already reduced projection may be attached as **validated trace evidence**. The backend treats the client projection as untrusted input and re-normalizes it through an allowlist before persistence.
-
-Only the structural fields documented above can enter the incident store. Extra fields, variables, config, error text and arbitrary results cannot be persisted through the incident API.
-
-## Evidence semantics
-
-Trace enrichment is additional execution evidence. It does not replace the context causality model.
-
-A trace can explain which branch/action path executed inside an automation or script. The context graph still determines how that run relates to the selected Home Assistant state change.
-
-
-## Frozen trace evidence
-
-Saving an incident while a matching trace projection is available freezes that safe structural projection together with the incident.
-
-If no retained Home Assistant trace exists, the incident is still saved normally with context evidence only.
-
-The saved projection remains bounded to 200 structural steps and is included in sanitized exports using pseudonymized automation/script, run and context identifiers.
+Trace steps describe execution inside a run. The context graph determines how
+the run relates to the selected state change; trace enrichment does not replace
+those [evidence rules](causality.md).

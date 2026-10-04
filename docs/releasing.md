@@ -29,7 +29,7 @@ when `CHANGELOG.md` has no matching version section.
 
 ## Before tagging
 
-1. Merge the stacked implementation PRs in dependency order.
+1. Select the candidate commit after merging the intended fixes.
 2. Run the full repository validation suite on the resulting default branch.
 3. Install that exact commit on a real Home Assistant instance.
 4. Complete every blocking item in
@@ -72,7 +72,8 @@ The Release workflow then re-runs:
 - Python compilation
 - pytest
 - frontend JavaScript checks
-- trace projection tests
+- frontend regression tests
+- HA 2026.9.4 schema, storage and final-write compatibility tests
 - hassfest
 - HACS validation
 - release contract validation

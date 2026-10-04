@@ -4,7 +4,7 @@ HA Forensic Lab persists the same bounded normalized event buffer used by the li
 
 ## Storage mechanism
 
-v0.1 uses Home Assistant's supported Store helper rather than writing a custom database directly.
+Rolling snapshots use Home Assistant's `Store` helper.
 
 The store is configured with:
 
@@ -27,7 +27,7 @@ The first new event after a completed snapshot schedules a write after the confi
 
 Further events inside that interval do not push the deadline back. This is intentional: a continuously active Home Assistant instance still receives periodic snapshots instead of waiting forever for a quiet period.
 
-A clean integration unload:
+Integration unload and the Home Assistant final-write event both:
 
 1. stops event-bus capture
 2. cancels any pending timer
@@ -37,11 +37,11 @@ A clean integration unload:
 
 This storage layer is **rolling persistence**, not a write-ahead log.
 
-If the Home Assistant process or host dies without a clean shutdown, the newest events since the last completed snapshot may be lost. With the default cadence, that window is normally at most roughly 10 seconds, plus the duration of an in-progress filesystem write.
+A hard process or host crash can lose events since the last successful snapshot. With working storage and the default cadence, this is roughly 10 seconds plus write time. Disk errors can extend the loss window.
 
 Atomic writes protect the previous completed snapshot from being replaced by a partially written file.
 
-A future SQLite/WAL backend can be considered if v0.1 testing shows that sub-second crash durability is worth the additional complexity and I/O surface.
+HA's Store helper logs some write errors without raising them. Rolling save counters measure helper calls; they do not verify disk contents. Check HA logs and restart persistence during testing. See [diagnostics](diagnostics.md) for counter definitions.
 
 ## Privacy
 

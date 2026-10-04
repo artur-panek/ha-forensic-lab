@@ -2,29 +2,11 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
-from pathlib import Path
-from types import ModuleType
 
-ROOT = Path(__file__).parents[1]
-INTEGRATION = ROOT / "custom_components" / "ha_forensic_lab"
-MODULE_PATH = INTEGRATION / "trace_evidence.py"
+from tests.support import load_module
 
-
-def _load_module(name: str, path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    assert spec.loader is not None
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-trace_evidence = _load_module("ha_forensic_lab_trace_evidence_test", MODULE_PATH)
+trace_evidence = load_module("trace_evidence")
 
 
 def _raw_projection():

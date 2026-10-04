@@ -17,10 +17,10 @@ The install/restart/config-entry/panel instructions are in
 [installation.md](installation.md). Custom-repository installability is not a
 claim that the real Home Assistant release checklist has passed.
 
-The schema compatibility job installs the actual HA 2026.9.4 package and checks
-options schemas, WebSocket defaults, required fields and validation error types.
-It does not boot a real installation or validate lifecycle, restart persistence,
-HACS UI or the forensic workflow. Those gates remain NOT RUN.
+The compatibility job installs HA 2026.9.4 and checks options/WebSocket schemas,
+incident writes (including disk failures) and the final-write shutdown hook.
+It uses temporary test storage and does not boot a full installation. The
+exact-SHA real-instance matrix remains incomplete.
 
 ## Default catalogue: not submitted
 
@@ -35,18 +35,15 @@ Before submitting to `hacs/default`:
    asset requirements, then submit the repository to the alphabetical
    `integration` list in `hacs/default`.
 
-At preparation time the repository had a description, enabled issues and no
-topics. The old description exception was removed; the existing topics exception
-remains explicit. The connected GitHub tools do not expose repository-topic
-editing. This metadata omission does not require publishing an untested release
-or prevent using a custom repository.
+The workflows currently ignore the missing repository topics check. This does
+not prevent custom-repository installation; remove the exception before a
+default-catalogue submission.
 
-## Candidate identity after these changes
+## Candidate identity
 
-This change fixes schema compatibility, so the older `40da89e` candidate/report
-is historical and must not be reused as evidence for this code. Download the new
-`ha-forensic-lab-candidate-<full-main-sha>` artifact from the final green main run,
-verify its ZIP checksum and record that SHA for real-instance testing.
+Download `ha-forensic-lab-candidate-<full-main-sha>` from a green main run. Verify
+its ZIP checksum and record the SHA used for real-instance testing. Reports for
+older commits are historical and do not validate later code changes.
 
 ## References
 

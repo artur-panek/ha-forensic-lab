@@ -1,61 +1,19 @@
-# Roadmap
+# Remaining alpha work
 
-The roadmap is ordered around useful forensic capability rather than feature
-count.
+Implemented behavior is listed in [v0.1 scope](v0.1-scope.md).
 
-## v0.1 alpha — Incident reconstruction
+Before the first public alpha:
 
-Implemented in the current alpha candidate:
+1. Install an exact-SHA candidate and complete the
+   [real-instance matrix](alpha-testing.md), including restart persistence,
+   incident review, export and capture filters.
+2. Record callback cost, storage observations and any HA log regressions.
+3. Fix failures and retest the affected paths with a new exact-SHA candidate.
+4. Complete the [release checklist](alpha-release-checklist.md), then publish the
+   matching pre-release tag.
 
-- bounded normalized runtime recorder
-- configurable capture scope and rolling retention
-- context and parent-context indexing
-- searchable runtime timeline
-- deterministic evidence relationships
-- **Explain this change**
-- privacy-reduced live automation/script trace enrichment
-- durable saved incidents and saved-incident Review
-- safe-only sanitized incident export
-- privacy-safe runtime diagnostics and Recorder health
-- production branding
-- read-only real-instance smoke client
-- deterministic release packaging and release contract
+Default HACS catalogue submission also needs repository topics and validation
+without ignored checks. See [HACS status](hacs-readiness.md).
 
-Release gates still outstanding until they are actually performed:
-
-- run the full real-instance alpha matrix
-- verify restart/persistence behavior on a real Home Assistant installation
-- collect initial performance observations
-- confirm known limitations against the tested HA version
-- intentionally publish the first pre-release tag
-
-## v0.2 — Better investigation workflows
-
-Candidates after alpha feedback:
-
-- richer graph navigation for context and trace paths
-- incident comparison
-- reusable investigation filters/bookmarks
-- better trace-to-event navigation
-- improved evidence-bundle summaries
-- carefully designed optional correlated evidence where deterministic context
-  is unavailable
-
-## v0.3 — Cross-tool workflows
-
-Potential directions:
-
-- optional integration points with HA Blast Radius
-- incident annotations
-- shareable investigation presets
-- compatibility/history views across Home Assistant releases
-
-## Later, only if justified
-
-- anomaly detection
-- automated incident detection
-- assisted root-cause summaries
-- cross-instance analysis
-
-AI-generated causality remains deliberately out of scope until deterministic
-evidence collection is trustworthy and alpha feedback justifies it.
+There are no committed v0.2 or v0.3 features. Investigation workflow changes
+should follow alpha feedback and a concrete reproducible need.

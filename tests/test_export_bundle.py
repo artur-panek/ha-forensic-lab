@@ -4,41 +4,16 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import importlib.util
 import io
 import json
-import sys
 import zipfile
-from pathlib import Path
-from types import ModuleType
 
-ROOT = Path(__file__).parents[1]
-INTEGRATION = ROOT / "custom_components" / "ha_forensic_lab"
-PACKAGE = "ha_forensic_lab_export_test"
+from tests.support import load_module
 
-
-def _load_module(name: str, path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    assert spec.loader is not None
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-package = ModuleType(PACKAGE)
-package.__path__ = [str(INTEGRATION)]
-sys.modules[PACKAGE] = package
-
-models = _load_module(f"{PACKAGE}.models", INTEGRATION / "models.py")
-incidents = _load_module(f"{PACKAGE}.incidents", INTEGRATION / "incidents.py")
-sanitizer = _load_module(f"{PACKAGE}.sanitizer", INTEGRATION / "sanitizer.py")
-export_bundle = _load_module(
-    f"{PACKAGE}.export_bundle",
-    INTEGRATION / "export_bundle.py",
-)
+models = load_module("models")
+incidents = load_module("incidents")
+sanitizer = load_module("sanitizer")
+export_bundle = load_module("export_bundle")
 
 
 def _incident():

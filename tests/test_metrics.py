@@ -2,30 +2,9 @@
 
 from __future__ import annotations
 
-import importlib.util
-import sys
-from pathlib import Path
-from types import ModuleType
+from tests.support import load_module
 
-ROOT = Path(__file__).parents[1]
-METRICS_PATH = ROOT / "custom_components" / "ha_forensic_lab" / "metrics.py"
-
-
-def _load_metrics() -> ModuleType:
-    spec = importlib.util.spec_from_file_location(
-        "ha_forensic_lab_metrics",
-        METRICS_PATH,
-    )
-    assert spec is not None
-    assert spec.loader is not None
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-metrics = _load_metrics()
+metrics = load_module("metrics")
 
 
 def test_capture_metrics_tracks_drop_reasons_and_handler_cost() -> None:

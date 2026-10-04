@@ -2,39 +2,13 @@
 
 from __future__ import annotations
 
-import importlib.util
 import json
-import sys
 from dataclasses import dataclass
-from pathlib import Path
-from types import ModuleType
 
-ROOT = Path(__file__).parents[1]
-INTEGRATION = ROOT / "custom_components" / "ha_forensic_lab"
-PACKAGE = "ha_forensic_lab_diagnostics_test"
+from tests.support import load_module
 
-
-def _load_module(name: str, path: Path) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(name, path)
-    assert spec is not None
-    assert spec.loader is not None
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[spec.name] = module
-    spec.loader.exec_module(module)
-    return module
-
-
-package = ModuleType(PACKAGE)
-package.__path__ = [str(INTEGRATION)]
-sys.modules[PACKAGE] = package
-
-const = _load_module(f"{PACKAGE}.const", INTEGRATION / "const.py")
-models = _load_module(f"{PACKAGE}.models", INTEGRATION / "models.py")
-diagnostics = _load_module(
-    f"{PACKAGE}.diagnostics_data",
-    INTEGRATION / "diagnostics_data.py",
-)
+const = load_module("const")
+diagnostics = load_module("diagnostics_data")
 
 
 @dataclass

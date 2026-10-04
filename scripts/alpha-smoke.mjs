@@ -183,7 +183,7 @@ try {
       " · callback avg " +
       String(capture.handler_average_ms ?? "?") +
       " ms" +
-      " · persistence failures " +
+      " · reported save errors " +
       String(persistence.failed_writes ?? "?")
   );
 

@@ -1,23 +1,30 @@
 # Security policy
 
-HA Forensic Lab may process sensitive Home Assistant runtime data. Security and privacy issues are therefore treated as first-class bugs.
-
 ## Reporting a vulnerability
 
-Please do not publish secrets, tokens, private event payloads or incident exports in a public issue.
+Use GitHub's private vulnerability reporting for this repository when available.
+If it is unavailable, open an issue with a minimal description and ask for a
+private contact path. Do not include tokens, raw traces or private evidence in a
+public issue.
 
-For a suspected vulnerability, use GitHub's private vulnerability reporting feature for this repository when available.
+## Data boundaries
 
-If private reporting is unavailable, open a public issue containing only a minimal description and no sensitive reproduction data, and ask for a private contact path.
+The panel, incident actions and custom WebSocket API require a Home Assistant
+administrator. Rolling snapshots and incidents use HA's private storage mode;
+this is a file-permission setting, not encryption.
 
-## Sensitive forensic data
+Local evidence can contain entity/context/user IDs, state strings, service
+names, targets, automation/script names and trigger descriptions. These fields
+may be sensitive. Capture omits state attributes, complete service data and
+arbitrary event payloads.
 
-Assume incident captures may contain:
+The browser fetches raw HA traces on demand and reduces them to structural
+steps. Config, variables, blueprint inputs, error text and arbitrary action
+results are discarded. Any projection attached to an incident is validated
+again by the backend.
 
-- entity and device names
-- user identifiers
-- service call data
-- automation/script variables
-- URLs or credentials accidentally present in payloads
-
-Sanitized export is a product requirement, not an optional convenience.
+The only export profile removes user IDs and absolute timestamps, pseudonymizes
+identifiers and redacts free text. It preserves domains, relative timing,
+allowlisted states and execution structure. Sanitization reduces disclosure;
+it does not guarantee anonymity. Review exported bundles before sharing them.
+See the [field policy](docs/export.md).

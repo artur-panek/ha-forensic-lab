@@ -6,12 +6,13 @@ from collections.abc import Iterable, Mapping
 from typing import Any
 
 from .models import ForensicEvent, ForensicEventKind
+from .query import event_to_dict
 
 
 def serialize_events(events: Iterable[ForensicEvent]) -> dict[str, Any]:
     """Serialize normalized events into the versioned Home Assistant Store body."""
     return {
-        "events": [_event_to_dict(event) for event in events],
+        "events": [event_to_dict(event) for event in events],
     }
 
 
@@ -32,25 +33,6 @@ def deserialize_events(data: object) -> tuple[ForensicEvent, ...]:
             continue
 
     return tuple(events)
-
-
-def _event_to_dict(event: ForensicEvent) -> dict[str, Any]:
-    return {
-        "event_id": event.event_id,
-        "kind": event.kind.value,
-        "timestamp": event.timestamp,
-        "context_id": event.context_id,
-        "parent_context_id": event.parent_context_id,
-        "user_id": event.user_id,
-        "entity_id": event.entity_id,
-        "domain": event.domain,
-        "service": event.service,
-        "name": event.name,
-        "source": event.source,
-        "target_entity_ids": list(event.target_entity_ids),
-        "old_state": event.old_state,
-        "new_state": event.new_state,
-    }
 
 
 def _event_from_dict(raw: object) -> ForensicEvent:
