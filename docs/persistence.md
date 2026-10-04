@@ -17,13 +17,13 @@ The stored body contains only normalized ForensicEvent records.
 
 ## Bound
 
-The in-memory capture deque is capped at 2048 events. The persistent snapshot is created from that deque, so persistence inherits the same bound.
+The in-memory capture deque defaults to 2048 events and is configurable from 256 to 8192 events through the integration options. The persistent snapshot is created from that deque, so persistence inherits the same bound.
 
 HA Forensic Lab does not append an unbounded event log.
 
 ## Write cadence
 
-The first new event after a completed snapshot schedules a write 10 seconds later.
+The first new event after a completed snapshot schedules a write after the configured persistence interval (5–60 seconds; default 10 seconds).
 
 Further events inside that interval do not push the deadline back. This is intentional: a continuously active Home Assistant instance still receives periodic snapshots instead of waiting forever for a quiet period.
 

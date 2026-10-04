@@ -62,7 +62,7 @@ Event timestamps remain separate and are used for chronology and display.
 
 ## Retention
 
-The live capture buffer is capped at 2048 normalized events.
+The live capture buffer defaults to 2048 normalized events; integration options allow 256–8192 events.
 
 That same bounded snapshot is persisted through Home Assistant's private storage layer:
 
