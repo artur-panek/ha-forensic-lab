@@ -1,0 +1,14 @@
+{
+  "title": "HA Forensic Lab",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up HA Forensic Lab",
+        "description": "Create a local, admin-only forensic workspace for Home Assistant. This pre-alpha build only installs the project shell and sidebar panel."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one HA Forensic Lab instance can be configured."
+    }
+  }
+}
