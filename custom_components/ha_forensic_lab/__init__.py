@@ -20,10 +20,12 @@ from .const import (
     PANEL_STATIC_URL,
     PANEL_URL_PATH,
 )
+from .websocket import async_register_websocket_api
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _DATA_STATIC_REGISTERED = "static_registered"
+_DATA_WEBSOCKET_REGISTERED = "websocket_registered"
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -42,6 +44,10 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             ]
         )
         domain_data[_DATA_STATIC_REGISTERED] = True
+
+    if not domain_data.get(_DATA_WEBSOCKET_REGISTERED):
+        async_register_websocket_api(hass)
+        domain_data[_DATA_WEBSOCKET_REGISTERED] = True
 
     return True
 
