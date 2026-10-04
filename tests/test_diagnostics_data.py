@@ -9,11 +9,12 @@ from tests.support import load_module
 
 const = load_module("const")
 diagnostics = load_module("diagnostics_data")
+models = load_module("models")
 
 
 @dataclass
 class FakeCapture:
-    events: tuple[object, ...]
+    events: tuple[models.ForensicEvent, ...]
     max_events: int
     diagnostics: dict[str, int | float]
 
@@ -47,7 +48,17 @@ def test_diagnostics_contains_aggregates_but_not_private_filter_values() -> None
         const.CONF_EXCLUDED_DOMAINS: ["device_tracker"],
     }
     capture = FakeCapture(
-        events=("secret-event-id",) * 12,
+        events=tuple(
+            models.ForensicEvent(
+                event_id="secret-event-id",
+                kind=models.ForensicEventKind.STATE_CHANGED,
+                timestamp=1_800_000_000 + index,
+                context_id=None,
+                parent_context_id=None,
+                user_id=None,
+            )
+            for index in range(12)
+        ),
         max_events=4096,
         diagnostics={
             "observed_events": 30,
@@ -83,6 +94,8 @@ def test_diagnostics_contains_aggregates_but_not_private_filter_values() -> None
     assert result["config"]["excluded_entity_count"] == 2
     assert result["config"]["excluded_domain_count"] == 1
     assert result["rolling_buffer"]["events"] == 12
+    assert result["rolling_buffer"]["retained_span_seconds"] == 11
+    assert result["config"]["capture_unchanged_states"] is False
     assert result["saved_incidents"]["count"] == 2
     assert result["saved_incidents"]["frozen_events"] == 14
     assert result["saved_incidents"]["with_trace_evidence"] == 1
@@ -93,6 +106,7 @@ def test_diagnostics_contains_aggregates_but_not_private_filter_values() -> None
         "device_tracker",
         "secret-event-id",
         "secret-incident-id",
+        "1800000000",
     ):
         assert secret not in serialized
 
@@ -108,6 +122,7 @@ def test_diagnostics_handles_unloaded_runtime() -> None:
 
     assert result["integration"]["version"] is None
     assert result["rolling_buffer"]["events"] == 0
+    assert result["rolling_buffer"]["retained_span_seconds"] == 0
     assert result["capture"] is None
     assert result["persistence"] is None
     assert result["saved_incidents"]["count"] == 0

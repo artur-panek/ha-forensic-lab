@@ -101,6 +101,17 @@ h1 {
   font-size: .78rem
 }
 
+.buffer-note {
+  margin: 0 0 14px;
+  color: var(--secondary-text-color);
+  font-size: .78rem;
+  line-height: 1.5
+}
+
+.buffer-note a {
+  color: var(--primary-color)
+}
+
 .health-panel {
   margin: 0 0 14px;
   padding: 16px;
@@ -149,10 +160,6 @@ h1 {
 
 .health-foot strong {
   color: var(--primary-text-color)
-}
-
-.health-privacy {
-  margin-left: auto
 }
 
 .health-state {
@@ -1044,9 +1051,6 @@ footer {
   }
   .health-grid {
     grid-template-columns: repeat(2,minmax(0,1fr))
-  }
-  .health-privacy {
-    margin-left: 0
   }
   form {
     grid-template-columns: 1fr

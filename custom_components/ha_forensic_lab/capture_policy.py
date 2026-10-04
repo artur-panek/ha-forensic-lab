@@ -8,6 +8,7 @@ from typing import Any
 
 from .const import (
     CONF_CAPTURE_EVENT_KINDS,
+    CONF_CAPTURE_UNCHANGED_STATES,
     CONF_EXCLUDED_DOMAINS,
     CONF_EXCLUDED_ENTITIES,
 )
@@ -34,6 +35,7 @@ class CapturePolicy:
     enabled_kinds: frozenset[ForensicEventKind] = _DEFAULT_KINDS
     excluded_entities: frozenset[str] = frozenset()
     excluded_domains: frozenset[str] = frozenset()
+    capture_unchanged_states: bool = False
 
     @classmethod
     def from_options(cls, options: Mapping[str, Any]) -> CapturePolicy:
@@ -63,6 +65,7 @@ class CapturePolicy:
             enabled_kinds=enabled_kinds,
             excluded_entities=excluded_entities,
             excluded_domains=excluded_domains,
+            capture_unchanged_states=options.get(CONF_CAPTURE_UNCHANGED_STATES, False),
         )
 
     def evaluate(self, event: ForensicEvent) -> CaptureDecision:
@@ -92,6 +95,17 @@ class CapturePolicy:
             return CaptureDecision(
                 event=None,
                 drop_reason=CaptureDropReason.EXCLUDED_DOMAIN,
+            )
+
+        if (
+            not self.capture_unchanged_states
+            and event.kind is ForensicEventKind.STATE_CHANGED
+            and event.old_state is not None
+            and event.old_state == event.new_state
+        ):
+            return CaptureDecision(
+                event=None,
+                drop_reason=CaptureDropReason.UNCHANGED_STATE,
             )
 
         if event.kind is not ForensicEventKind.CALL_SERVICE:

@@ -21,14 +21,16 @@
           "persist_interval_seconds": "Maximum persistence interval (seconds)",
           "capture_event_kinds": "Captured event types",
           "excluded_entities": "Excluded entities",
-          "excluded_domains": "Excluded domains"
+          "excluded_domains": "Excluded domains",
+          "capture_unchanged_states": "Capture unchanged-state updates"
         },
         "data_description": {
           "capture_buffer_size": "Maximum normalized events held in the rolling buffer (256–8192).",
           "persist_interval_seconds": "Maximum delay before a dirty rolling snapshot is written (5–60 seconds).",
           "capture_event_kinds": "Only selected runtime event types enter the forensic buffer.",
           "excluded_entities": "Events for these entities are discarded before retention and persistence.",
-          "excluded_domains": "Type a Home Assistant domain such as camera or person. Matching events and service targets are discarded before persistence."
+          "excluded_domains": "Type a Home Assistant domain such as camera or person. Matching events and service targets are discarded before persistence.",
+          "capture_unchanged_states": "Include attribute-only or forced updates such as playing → playing. Attributes themselves are not stored. Enable when investigating attribute-triggered automations."
         }
       }
     }

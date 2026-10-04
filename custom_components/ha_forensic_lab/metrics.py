@@ -13,6 +13,7 @@ class CaptureDropReason(StrEnum):
     EXCLUDED_ENTITY = "excluded_entity"
     EXCLUDED_DOMAIN = "excluded_domain"
     EXCLUDED_TARGETS = "excluded_targets"
+    UNCHANGED_STATE = "unchanged_state"
 
 
 @dataclass(slots=True)
@@ -29,6 +30,7 @@ class CaptureMetrics:
     dropped_excluded_entity: int = 0
     dropped_excluded_domain: int = 0
     dropped_excluded_targets: int = 0
+    dropped_unchanged_state: int = 0
     handler_calls: int = 0
     handler_total_ns: int = 0
     handler_max_ns: int = 0
@@ -43,6 +45,8 @@ class CaptureMetrics:
             self.dropped_excluded_domain += 1
         elif reason is CaptureDropReason.EXCLUDED_TARGETS:
             self.dropped_excluded_targets += 1
+        elif reason is CaptureDropReason.UNCHANGED_STATE:
+            self.dropped_unchanged_state += 1
 
     def record_handler_duration(self, duration_ns: int) -> None:
         """Record one event-bus callback duration."""
@@ -66,6 +70,7 @@ class CaptureMetrics:
             "dropped_excluded_entity": self.dropped_excluded_entity,
             "dropped_excluded_domain": self.dropped_excluded_domain,
             "dropped_excluded_targets": self.dropped_excluded_targets,
+            "dropped_unchanged_state": self.dropped_unchanged_state,
             "handler_calls": self.handler_calls,
             "handler_average_ms": round(average_ns / 1_000_000, 6),
             "handler_max_ms": round(self.handler_max_ns / 1_000_000, 6),

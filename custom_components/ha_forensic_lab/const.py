@@ -14,6 +14,7 @@ MAX_PERSIST_INTERVAL_SECONDS = 60
 CONF_CAPTURE_BUFFER_SIZE = "capture_buffer_size"
 CONF_PERSIST_INTERVAL_SECONDS = "persist_interval_seconds"
 CONF_CAPTURE_EVENT_KINDS = "capture_event_kinds"
+CONF_CAPTURE_UNCHANGED_STATES = "capture_unchanged_states"
 CONF_EXCLUDED_ENTITIES = "excluded_entities"
 CONF_EXCLUDED_DOMAINS = "excluded_domains"
 

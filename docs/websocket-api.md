@@ -21,6 +21,9 @@ Optional filters:
 | since | number | Minimum Home Assistant event timestamp |
 
 Results are newest-first and include normalized events plus current rolling buffer size/capacity.
+`retained_span_seconds` reports the timestamp span of the entire rolling buffer,
+before query filters or the response limit. Empty and single-event buffers report
+zero. This duration is also available in aggregate diagnostics.
 
 ## Explain
 

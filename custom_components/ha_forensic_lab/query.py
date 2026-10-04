@@ -8,6 +8,12 @@ from typing import Any
 from .models import ForensicEvent
 
 
+def retained_span_seconds(events: Iterable[ForensicEvent]) -> float:
+    """Return the timestamp span of the entire buffer, not a filtered page."""
+    timestamps = [event.timestamp for event in events]
+    return max(timestamps) - min(timestamps) if timestamps else 0.0
+
+
 def query_events(
     events: Iterable[ForensicEvent],
     *,

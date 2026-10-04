@@ -55,3 +55,34 @@ test("HA state updates preserve panel DOM and requests use the latest connection
   assert.equal(requests, 4);
   assert.ok(replacements > 0);
 });
+
+test("full buffers show server-reported retention instead of the filtered page span", async () => {
+  const panel = new Panel();
+  panel._hass = {
+    async callWS() {
+      return {
+        events: [{ timestamp: 100 }],
+        buffer_size: 2048,
+        buffer_capacity: 2048,
+        retained_span_seconds: 125,
+      };
+    },
+  };
+  await panel._loadTimeline();
+  const html = panel._statsView(1);
+  assert.ok(html.includes("2m 5s"));
+  assert.ok(html.includes("Retained span"));
+  assert.ok(html.includes("new events replace the oldest"));
+  assert.ok(html.includes("Timeline filters only change this view"));
+});
+
+test("diagnostics distinguish filtered updates from buffer evictions", () => {
+  const panel = new Panel();
+  panel._diagnostics = {
+    capture: { retained_events: 2883, dropped_unchanged_state: 500, evicted_events: 835 },
+  };
+  const html = panel._recorderHealthView();
+  assert.ok(html.includes("2883 / 500"));
+  assert.ok(html.includes("835 evicted this session"));
+  assert.ok(html.includes("500 unchanged updates skipped"));
+});

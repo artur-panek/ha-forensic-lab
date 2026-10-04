@@ -49,6 +49,10 @@ causal links or AI root-cause claims.
 ## Retention and privacy
 
 The rolling buffer defaults to **2,048 events**, configurable from 256 to 8,192.
+Updates with an unchanged state string (such as `playing → playing`) are skipped
+by default; enable **Capture unchanged-state updates** for attribute-triggered
+investigations. Actual sensor value changes still count. The panel shows the
+retained time span; once full, the buffer replaces its oldest events.
 Snapshots are requested every 5–60 seconds while data changes (default 10).
 A hard crash can lose events since the last successful snapshot.
 

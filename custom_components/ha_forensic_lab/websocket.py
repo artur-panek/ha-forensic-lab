@@ -29,7 +29,7 @@ from .incidents import (
     create_incident,
 )
 from .models import ForensicEventKind
-from .query import event_to_dict, query_events
+from .query import event_to_dict, query_events, retained_span_seconds
 from .store import RollingForensicStore
 from .trace_evidence import normalize_trace_evidence, trace_evidence_to_dict
 
@@ -96,6 +96,7 @@ def websocket_timeline(
             "events": [event_to_dict(event) for event in events],
             "buffer_size": len(snapshot),
             "buffer_capacity": capture.max_events,
+            "retained_span_seconds": retained_span_seconds(snapshot),
         },
     )
 

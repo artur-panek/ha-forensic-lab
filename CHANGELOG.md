@@ -41,6 +41,8 @@ First alpha candidate.
 
 ### Fixed during candidate audit
 
+- skip unchanged-state updates by default, with an opt-in for attribute-based
+  investigations; report retained time span, filtered updates and buffer evictions
 - use matching voluptuous schemas and validation exceptions on HA 2026.9.4
 - document HACS custom-repository installation before the first public release
 - reject arbitrary token-shaped text in trace structural fields

@@ -48,5 +48,11 @@ def test_options_form_uses_home_assistant_schema_and_validates_bounds(ha_modules
     assert isinstance(schema, vol.Schema)
     valid = config_flow._default_options()
     assert schema(valid)["capture_buffer_size"] == 2048
+    assert schema(valid)["capture_unchanged_states"] is False
+    assert schema(valid | {"capture_unchanged_states": True})[
+        "capture_unchanged_states"
+    ] is True
+    with pytest.raises(vol.Invalid):
+        schema(valid | {"capture_unchanged_states": "yes"})
     with pytest.raises(vol.Invalid):
         schema(valid | {"capture_buffer_size": 0})
