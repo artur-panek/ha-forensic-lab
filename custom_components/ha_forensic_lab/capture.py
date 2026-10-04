@@ -12,6 +12,7 @@ from homeassistant.components.script import EVENT_SCRIPT_STARTED
 from homeassistant.const import EVENT_CALL_SERVICE, EVENT_STATE_CHANGED
 from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 
+from .capture_policy import CapturePolicy
 from .const import DEFAULT_CAPTURE_BUFFER_SIZE
 from .models import ForensicEvent, normalize_event
 
@@ -33,6 +34,7 @@ class ForensicCapture:
         max_events: int = DEFAULT_CAPTURE_BUFFER_SIZE,
         initial_events: Iterable[ForensicEvent] = (),
         on_change: Callable[[], None] | None = None,
+        policy: CapturePolicy | None = None,
     ) -> None:
         """Initialize the capture layer."""
         if max_events < 1:
@@ -44,6 +46,7 @@ class ForensicCapture:
             maxlen=max_events,
         )
         self._on_change = on_change
+        self._policy = policy or CapturePolicy()
         self._session_id = uuid4().hex
         self._sequence = count(1)
         self._remove_listeners: list[CALLBACK_TYPE] = []
@@ -77,7 +80,7 @@ class ForensicCapture:
 
     @callback
     def _handle_event(self, event: Event) -> None:
-        """Normalize one event and append it to the bounded buffer."""
+        """Normalize, filter and retain one Home Assistant runtime event."""
         normalized = normalize_event(
             event,
             next(self._sequence),
@@ -86,6 +89,10 @@ class ForensicCapture:
         if normalized is None:
             return
 
-        self._events.append(normalized)
+        retained = self._policy.apply(normalized)
+        if retained is None:
+            return
+
+        self._events.append(retained)
         if self._on_change is not None:
             self._on_change()

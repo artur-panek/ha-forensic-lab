@@ -11,10 +11,15 @@ from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
 from .capture import ForensicCapture
+from .capture_policy import CapturePolicy
 from .const import (
+    CONF_CAPTURE_BUFFER_SIZE,
+    CONF_PERSIST_INTERVAL_SECONDS,
     DATA_CAPTURE,
     DATA_INCIDENT_STORE,
     DATA_STORE,
+    DEFAULT_CAPTURE_BUFFER_SIZE,
+    DEFAULT_PERSIST_INTERVAL_SECONDS,
     DOMAIN,
     NAME,
     PANEL_COMPONENT_NAME,
@@ -66,23 +71,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await existing_store.async_flush()
     domain_data.pop(DATA_INCIDENT_STORE, None)
 
-    store = RollingForensicStore(hass)
-    restored_events = await store.async_load()
+    options = entry.options
+    max_events = int(
+        options.get(CONF_CAPTURE_BUFFER_SIZE, DEFAULT_CAPTURE_BUFFER_SIZE)
+    )
+    persist_interval = int(
+        options.get(
+            CONF_PERSIST_INTERVAL_SECONDS,
+            DEFAULT_PERSIST_INTERVAL_SECONDS,
+        )
+    )
+    policy = CapturePolicy.from_options(options)
+
+    store = RollingForensicStore(
+        hass,
+        save_interval=persist_interval,
+    )
+    raw_restored_events = await store.async_load()
+    restored_events = policy.filter_snapshot(raw_restored_events)
 
     incident_store = IncidentStore(hass)
     await incident_store.async_load()
 
     capture = ForensicCapture(
         hass,
+        max_events=max_events,
         initial_events=restored_events,
         on_change=store.schedule_save,
+        policy=policy,
     )
     store.bind_snapshot_provider(lambda: capture.events)
+
+    if (
+        len(raw_restored_events) > max_events
+        or restored_events != raw_restored_events
+    ):
+        store.schedule_save()
 
     capture.start()
     domain_data[DATA_CAPTURE] = capture
     domain_data[DATA_INCIDENT_STORE] = incident_store
     domain_data[DATA_STORE] = store
+
+    entry.async_on_unload(entry.add_update_listener(_async_reload_entry))
 
     if not async_panel_exists(hass, PANEL_URL_PATH):
         await panel_custom.async_register_panel(
@@ -112,3 +143,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         frontend.async_remove_panel(hass, PANEL_URL_PATH)
 
     return True
+
+
+async def _async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload capture and retention settings after options change."""
+    await hass.config_entries.async_reload(entry.entry_id)

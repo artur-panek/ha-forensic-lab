@@ -37,6 +37,7 @@ The UI must make those classes visually distinct.
 The first useful release is intentionally small:
 
 - bounded runtime event recording
+- configurable capture scope and retention
 - searchable incident timeline
 - context-chain reconstruction
 - **Explain this change**
@@ -44,14 +45,16 @@ The first useful release is intentionally small:
 - sanitized incident export
 - native Home Assistant sidebar panel
 
-See the docs directory for architecture, event model, persistence, causality, incident, export and WebSocket details.
+See the docs directory for architecture, event model, persistence, capture settings, causality, incident, export and WebSocket details.
 
 ## Current status
 
 Implemented in the development stack:
 
 - capture state changes, service calls, automation triggers and script starts
-- bounded 2048-event rolling buffer
+- configurable event-type/entity/domain capture filters
+- configurable bounded rolling capacity (256–8192 events)
+- configurable rolling persistence cadence (5–60 seconds)
 - private atomic rolling snapshot persistence
 - admin-only searchable timeline
 - deterministic context-based **Explain this change**
@@ -63,6 +66,10 @@ Implemented in the development stack:
 - durable saved-incident Review that reconstructs causality without the live buffer
 - safe-profile sanitized ZIP export and download from the sidebar
 - explicit evidence gaps instead of timing guesses
+
+Capture filters are applied before rolling retention and persistence, including to
+a restored rolling snapshot after an options change. See
+[`docs/capture-settings.md`](docs/capture-settings.md).
 
 Saved incidents are bounded to 50 records and 500 frozen events per record.
 
@@ -76,7 +83,7 @@ Still intentionally missing from v0.1:
 
 ## Persistence caveat
 
-Rolling persistence is not a write-ahead log. A hard process or host crash can lose the newest rolling events since the most recent completed snapshot, normally roughly the configured 10-second interval. Clean unloads flush immediately.
+Rolling persistence is not a write-ahead log. A hard process or host crash can lose the newest rolling events since the most recent completed snapshot, normally roughly the configured persistence interval. Clean unloads flush immediately.
 
 Saved incidents are explicit user actions and are written immediately.
 
