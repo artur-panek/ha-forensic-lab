@@ -45,7 +45,7 @@ The first useful release is intentionally small:
 - sanitized incident export
 - native Home Assistant sidebar panel
 
-See the docs directory for architecture, event model, persistence, capture settings, causality, incident, export and WebSocket details.
+See the docs directory for architecture, event model, persistence, capture settings, runtime diagnostics, causality, incident, export and WebSocket details.
 
 ## Current status
 
@@ -55,6 +55,7 @@ Implemented in the development stack:
 - configurable event-type/entity/domain capture filters
 - configurable bounded rolling capacity (256–8192 events)
 - configurable rolling persistence cadence (5–60 seconds)
+- privacy-safe runtime diagnostics and recorder performance counters
 - private atomic rolling snapshot persistence
 - admin-only searchable timeline
 - deterministic context-based **Explain this change**

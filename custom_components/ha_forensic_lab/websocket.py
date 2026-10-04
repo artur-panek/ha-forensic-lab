@@ -10,7 +10,8 @@ from homeassistant.core import HomeAssistant, callback
 
 from .capture import ForensicCapture
 from .causality import EvidenceEdge, ForensicExplanation, explain_event
-from .const import DATA_CAPTURE, DATA_INCIDENT_STORE, DOMAIN
+from .const import DATA_CAPTURE, DATA_INCIDENT_STORE, DATA_STORE, DOMAIN
+from .diagnostics_data import build_runtime_diagnostics
 from .export_bundle import ExportBundle, build_export_bundle
 from .incident_review import (
     DEFAULT_INCIDENT_REVIEW_LIMIT,
@@ -28,6 +29,7 @@ from .incidents import (
 )
 from .models import ForensicEventKind
 from .query import event_to_dict, query_events
+from .store import RollingForensicStore
 from .trace_evidence import normalize_trace_evidence, trace_evidence_to_dict
 
 DEFAULT_TIMELINE_LIMIT = 100
@@ -48,6 +50,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_incidents_create)
     websocket_api.async_register_command(hass, websocket_incidents_delete)
     websocket_api.async_register_command(hass, websocket_incidents_export)
+    websocket_api.async_register_command(hass, websocket_diagnostics)
 
 
 @websocket_api.require_admin
@@ -369,6 +372,38 @@ async def websocket_incidents_export(
 
     bundle = await hass.async_add_executor_job(build_export_bundle, incident)
     connection.send_result(msg["id"], _export_bundle_to_dict(bundle))
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command({"type": "ha_forensic_lab/diagnostics"})
+@callback
+def websocket_diagnostics(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return privacy-safe aggregate runtime diagnostics."""
+    domain_data = hass.data.get(DOMAIN, {})
+    capture = domain_data.get(DATA_CAPTURE)
+    store = domain_data.get(DATA_STORE)
+    incident_store = domain_data.get(DATA_INCIDENT_STORE)
+
+    entries = hass.config_entries.async_entries(DOMAIN)
+    options = entries[0].options if entries else {}
+
+    connection.send_result(
+        msg["id"],
+        build_runtime_diagnostics(
+            options,
+            capture=capture if isinstance(capture, ForensicCapture) else None,
+            store=store if isinstance(store, RollingForensicStore) else None,
+            incident_store=(
+                incident_store
+                if isinstance(incident_store, IncidentStore)
+                else None
+            ),
+        ),
+    )
 
 
 def _incident_review_to_dict(

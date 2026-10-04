@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable, Iterable
 from itertools import count
+from time import perf_counter_ns
 from uuid import uuid4
 
 from homeassistant.components.automation import EVENT_AUTOMATION_TRIGGERED
@@ -14,6 +15,7 @@ from homeassistant.core import CALLBACK_TYPE, Event, HomeAssistant, callback
 
 from .capture_policy import CapturePolicy
 from .const import DEFAULT_CAPTURE_BUFFER_SIZE
+from .metrics import CaptureMetrics
 from .models import ForensicEvent, normalize_event
 
 _CAPTURE_EVENT_TYPES = (
@@ -47,6 +49,7 @@ class ForensicCapture:
         )
         self._on_change = on_change
         self._policy = policy or CapturePolicy()
+        self._metrics = CaptureMetrics()
         self._session_id = uuid4().hex
         self._sequence = count(1)
         self._remove_listeners: list[CALLBACK_TYPE] = []
@@ -60,6 +63,11 @@ class ForensicCapture:
     def max_events(self) -> int:
         """Return the configured in-memory retention bound."""
         return self._events.maxlen or 0
+
+    @property
+    def diagnostics(self) -> dict[str, int | float]:
+        """Return privacy-safe aggregate capture diagnostics."""
+        return self._metrics.as_dict()
 
     @callback
     def start(self) -> None:
@@ -81,18 +89,35 @@ class ForensicCapture:
     @callback
     def _handle_event(self, event: Event) -> None:
         """Normalize, filter and retain one Home Assistant runtime event."""
-        normalized = normalize_event(
-            event,
-            next(self._sequence),
-            self._session_id,
-        )
-        if normalized is None:
-            return
+        started_ns = perf_counter_ns()
+        self._metrics.observed_events += 1
 
-        retained = self._policy.apply(normalized)
-        if retained is None:
-            return
+        try:
+            normalized = normalize_event(
+                event,
+                next(self._sequence),
+                self._session_id,
+            )
+            if normalized is None:
+                self._metrics.normalization_drops += 1
+                return
 
-        self._events.append(retained)
-        if self._on_change is not None:
-            self._on_change()
+            self._metrics.normalized_events += 1
+            decision = self._policy.evaluate(normalized)
+            self._metrics.filtered_service_targets += decision.filtered_targets
+
+            if decision.event is None:
+                if decision.drop_reason is not None:
+                    self._metrics.record_drop(decision.drop_reason)
+                return
+
+            if len(self._events) == self.max_events:
+                self._metrics.evicted_events += 1
+
+            self._events.append(decision.event)
+            self._metrics.retained_events += 1
+
+            if self._on_change is not None:
+                self._on_change()
+        finally:
+            self._metrics.record_handler_duration(perf_counter_ns() - started_ns)

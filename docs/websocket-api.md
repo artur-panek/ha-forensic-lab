@@ -122,6 +122,30 @@ The ZIP contains manifest.json, incident.json and summary.md.
 
 Export construction is performed outside the Home Assistant event loop.
 
+## Diagnostics
+
+Command type:
+
+~~~text
+ha_forensic_lab/diagnostics
+~~~
+
+Returns privacy-safe aggregate runtime health data for administrators:
+
+- rolling buffer size/capacity
+- capture/drop/eviction counters
+- average and maximum capture callback time
+- rolling persistence write/load counters and durations
+- pending-write status
+- saved incident counts and total frozen-event count
+- active configuration bounds and filter counts
+
+It does **not** include event IDs, entity IDs, context IDs, incident IDs,
+incident titles, state values or trace payloads.
+
+The same aggregate payload is available through Home Assistant's native
+config-entry diagnostics download.
+
 ## Security
 
 Every command requires an authenticated Home Assistant administrator.

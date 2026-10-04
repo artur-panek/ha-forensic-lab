@@ -11,10 +11,20 @@ from .const import (
     CONF_EXCLUDED_DOMAINS,
     CONF_EXCLUDED_ENTITIES,
 )
+from .metrics import CaptureDropReason
 from .models import ForensicEvent, ForensicEventKind
 
 _DEFAULT_KINDS = frozenset(ForensicEventKind)
 _VALID_KIND_VALUES = frozenset(kind.value for kind in ForensicEventKind)
+
+
+@dataclass(frozen=True, slots=True)
+class CaptureDecision:
+    """Result of applying the current capture policy to one event."""
+
+    event: ForensicEvent | None
+    drop_reason: CaptureDropReason | None = None
+    filtered_targets: int = 0
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,33 +65,63 @@ class CapturePolicy:
             excluded_domains=excluded_domains,
         )
 
-    def apply(self, event: ForensicEvent) -> ForensicEvent | None:
-        """Return a retainable event or None when policy excludes it."""
+    def evaluate(self, event: ForensicEvent) -> CaptureDecision:
+        """Classify and optionally filter one normalized event."""
         if event.kind not in self.enabled_kinds:
-            return None
+            return CaptureDecision(
+                event=None,
+                drop_reason=CaptureDropReason.DISABLED_KIND,
+            )
 
-        if self._entity_is_excluded(event.entity_id):
-            return None
+        if self._entity_is_explicitly_excluded(event.entity_id):
+            return CaptureDecision(
+                event=None,
+                drop_reason=CaptureDropReason.EXCLUDED_ENTITY,
+            )
 
-        if event.domain is not None and event.domain in self.excluded_domains:
-            return None
+        if self._entity_domain_is_excluded(event.entity_id):
+            return CaptureDecision(
+                event=None,
+                drop_reason=CaptureDropReason.EXCLUDED_DOMAIN,
+            )
+
+        if (
+            event.domain is not None
+            and event.domain.casefold() in self.excluded_domains
+        ):
+            return CaptureDecision(
+                event=None,
+                drop_reason=CaptureDropReason.EXCLUDED_DOMAIN,
+            )
 
         if event.kind is not ForensicEventKind.CALL_SERVICE:
-            return event
+            return CaptureDecision(event=event)
 
         filtered_targets = tuple(
             entity_id
             for entity_id in event.target_entity_ids
             if not self._entity_is_excluded(entity_id)
         )
+        filtered_count = len(event.target_entity_ids) - len(filtered_targets)
 
         if event.target_entity_ids and not filtered_targets:
-            return None
+            return CaptureDecision(
+                event=None,
+                drop_reason=CaptureDropReason.EXCLUDED_TARGETS,
+                filtered_targets=filtered_count,
+            )
 
         if filtered_targets != event.target_entity_ids:
-            return replace(event, target_entity_ids=filtered_targets)
+            return CaptureDecision(
+                event=replace(event, target_entity_ids=filtered_targets),
+                filtered_targets=filtered_count,
+            )
 
-        return event
+        return CaptureDecision(event=event)
+
+    def apply(self, event: ForensicEvent) -> ForensicEvent | None:
+        """Return a retainable event or None when policy excludes it."""
+        return self.evaluate(event).event
 
     def filter_snapshot(
         self,
@@ -95,16 +135,22 @@ class CapturePolicy:
                 filtered.append(retained)
         return tuple(filtered)
 
-    def _entity_is_excluded(self, entity_id: str | None) -> bool:
+    def _entity_is_explicitly_excluded(self, entity_id: str | None) -> bool:
+        return bool(
+            entity_id is not None
+            and entity_id.casefold() in self.excluded_entities
+        )
+
+    def _entity_domain_is_excluded(self, entity_id: str | None) -> bool:
         if entity_id is None:
             return False
-
-        normalized = entity_id.casefold()
-        if normalized in self.excluded_entities:
-            return True
-
-        domain, separator, _object_id = normalized.partition(".")
+        domain, separator, _object_id = entity_id.casefold().partition(".")
         return bool(separator and domain in self.excluded_domains)
+
+    def _entity_is_excluded(self, entity_id: str | None) -> bool:
+        return self._entity_is_explicitly_excluded(
+            entity_id
+        ) or self._entity_domain_is_excluded(entity_id)
 
 
 def _normalize_filter_value(value: object) -> str:
