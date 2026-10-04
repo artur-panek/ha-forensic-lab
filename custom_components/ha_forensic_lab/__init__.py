@@ -10,7 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.typing import ConfigType
 
+from .capture import ForensicCapture
 from .const import (
+    DATA_CAPTURE,
     DOMAIN,
     NAME,
     PANEL_COMPONENT_NAME,
@@ -46,6 +48,15 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up HA Forensic Lab from a config entry."""
+    domain_data = hass.data.setdefault(DOMAIN, {})
+
+    if existing_capture := domain_data.pop(DATA_CAPTURE, None):
+        existing_capture.stop()
+
+    capture = ForensicCapture(hass)
+    capture.start()
+    domain_data[DATA_CAPTURE] = capture
+
     if not async_panel_exists(hass, PANEL_URL_PATH):
         await panel_custom.async_register_panel(
             hass=hass,
@@ -62,6 +73,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a HA Forensic Lab config entry."""
+    domain_data = hass.data.get(DOMAIN, {})
+    if capture := domain_data.pop(DATA_CAPTURE, None):
+        capture.stop()
+
     if async_panel_exists(hass, PANEL_URL_PATH):
         frontend.async_remove_panel(hass, PANEL_URL_PATH)
 

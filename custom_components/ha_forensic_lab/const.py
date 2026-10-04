@@ -3,6 +3,9 @@
 DOMAIN = "ha_forensic_lab"
 NAME = "HA Forensic Lab"
 
+DEFAULT_CAPTURE_BUFFER_SIZE = 2048
+DATA_CAPTURE = "capture"
+
 PANEL_COMPONENT_NAME = "ha-forensic-lab-panel"
 PANEL_FILENAME = "ha-forensic-lab-panel.js"
 PANEL_STATIC_URL = "/ha_forensic_lab_static"

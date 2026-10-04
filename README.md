@@ -7,7 +7,7 @@ HA Forensic Lab is an experimental Home Assistant custom integration for reconst
 The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
 
 > [!IMPORTANT]
-> HA Forensic Lab is pre-alpha. The current branch establishes the v0.1 architecture and integration shell; the event recorder is not enabled yet.
+> HA Forensic Lab is pre-alpha. The current development branch captures a minimal normalized runtime event stream into a bounded in-memory buffer; persistence and forensic queries are not implemented yet.
 
 ## The problem
 
@@ -40,15 +40,17 @@ The first useful release is intentionally small:
 - sanitized incident export
 - native Home Assistant sidebar panel
 
-See [docs/v0.1-scope.md](docs/v0.1-scope.md) for the acceptance criteria and [docs/architecture.md](docs/architecture.md) for the proposed design.
+See [docs/v0.1-scope.md](docs/v0.1-scope.md) for the acceptance criteria, [docs/architecture.md](docs/architecture.md) for the proposed design, and [docs/event-model.md](docs/event-model.md) for the current capture schema.
 
 ## Repository layout
 
 ~~~text
 custom_components/ha_forensic_lab/
 ├── __init__.py
+├── capture.py
 ├── config_flow.py
 ├── const.py
+├── models.py
 ├── manifest.json
 ├── strings.json
 ├── translations/
@@ -60,7 +62,16 @@ The repository follows the HACS integration layout from the start.
 
 ## Current status
 
-The integration can be added through Home Assistant's UI and registers an admin-only placeholder sidebar panel. Recording and forensic analysis are deliberately not implemented in this foundation commit.
+The integration can be added through Home Assistant's UI and registers an admin-only sidebar panel.
+
+The current capture layer listens for:
+
+- state changes
+- service calls
+- automation triggers
+- script starts
+
+It stores only a compact normalized representation in a bounded in-memory buffer. No database writes or raw payload persistence are performed yet.
 
 ## Development
 
@@ -76,7 +87,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Security and privacy
 
-Forensic captures may contain entity names, service payloads, user IDs and automation context. Exports must therefore be sanitized by default and the analysis panel is admin-only.
+Forensic captures may contain entity names, service metadata, user IDs and automation context. Richer future evidence may be more sensitive, so exports must be sanitized by default and the analysis panel is admin-only.
 
 Please report security issues as described in [SECURITY.md](SECURITY.md).
 
