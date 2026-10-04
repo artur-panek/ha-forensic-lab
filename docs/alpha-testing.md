@@ -5,6 +5,30 @@ This document defines the first closed-alpha validation path for HA Forensic Lab
 Passing CI is necessary but not sufficient. The checks below are intended for a
 real Home Assistant instance before the project is called alpha-ready.
 
+## Exact candidate build
+
+For real-instance testing, prefer the ZIP artifact produced by the green
+**Validate → Code checks** job rather than rebuilding a moving branch locally.
+
+After the candidate PR/commit is green:
+
+1. open its GitHub Actions **Validate** run
+2. download the artifact named:
+
+   ~~~text
+   ha-forensic-lab-candidate-<full-commit-sha>
+   ~~~
+
+3. verify the included `ha-forensic-lab.zip.sha256`
+4. record the full commit SHA in the test report
+5. install that exact ZIP as described in [installation.md](installation.md)
+
+Candidate artifacts are retained for 14 days. The artifact name binds the test
+package to the exact source commit that passed CI.
+
+The artifact is for testing only. Its existence does not mean an alpha release
+has been published.
+
 ## Read-only smoke client
 
 A zero-touch WebSocket smoke client is included:
@@ -145,6 +169,7 @@ For each alpha installation record:
 ~~~text
 Home Assistant version:
 HA Forensic Lab commit/version:
+CI candidate artifact name:
 Installation method:
 Approximate entity count:
 Capture buffer setting:

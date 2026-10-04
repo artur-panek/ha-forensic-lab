@@ -58,3 +58,15 @@ jobs:
         run: pytest -q
       - name: Build release archive
         run: python scripts/build_release.py --output dist
+
+      - name: Upload exact candidate package
+        if: github.event_name != 'schedule'
+        uses: actions/upload-artifact@v7
+        with:
+          name: ha-forensic-lab-candidate-${{ github.sha }}
+          path: |
+            dist/ha-forensic-lab.zip
+            dist/ha-forensic-lab.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0

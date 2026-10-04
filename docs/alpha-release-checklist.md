@@ -18,6 +18,8 @@ A checked box means the behavior has been verified, not merely implemented.
 - [ ] CHANGELOG has a matching version section
 - [ ] deterministic manual-install ZIP builds successfully
 - [ ] ZIP checksum is generated and verified
+- [ ] real-instance testing uses an exact-SHA CI candidate artifact
+- [ ] tested candidate commit SHA is recorded in the alpha test report
 - [ ] release workflow has been reviewed before the first tag is pushed
 
 ## Home Assistant lifecycle
