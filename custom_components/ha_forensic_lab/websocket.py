@@ -10,7 +10,15 @@ from homeassistant.core import HomeAssistant, callback
 
 from .capture import ForensicCapture
 from .causality import EvidenceEdge, ForensicExplanation, explain_event
-from .const import DATA_CAPTURE, DOMAIN
+from .const import DATA_CAPTURE, DATA_INCIDENT_STORE, DOMAIN
+from .incident_store import IncidentLimitReached, IncidentStore
+from .incidents import (
+    DEFAULT_INCIDENT_AFTER_SECONDS,
+    DEFAULT_INCIDENT_BEFORE_SECONDS,
+    MAX_INCIDENT_WINDOW_SECONDS,
+    Incident,
+    create_incident,
+)
 from .models import ForensicEventKind
 from .query import event_to_dict, query_events
 
@@ -26,6 +34,10 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     """Register HA Forensic Lab WebSocket commands."""
     websocket_api.async_register_command(hass, websocket_timeline)
     websocket_api.async_register_command(hass, websocket_explain)
+    websocket_api.async_register_command(hass, websocket_incidents_list)
+    websocket_api.async_register_command(hass, websocket_incidents_get)
+    websocket_api.async_register_command(hass, websocket_incidents_create)
+    websocket_api.async_register_command(hass, websocket_incidents_delete)
 
 
 @websocket_api.require_admin
@@ -112,6 +124,166 @@ def websocket_explain(
     connection.send_result(msg["id"], _explanation_to_dict(explanation))
 
 
+@websocket_api.require_admin
+@websocket_api.websocket_command({"type": "ha_forensic_lab/incidents/list"})
+@callback
+def websocket_incidents_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """List saved incidents newest first."""
+    store = _incident_store_or_error(hass, connection, msg["id"])
+    if store is None:
+        return
+
+    connection.send_result(
+        msg["id"],
+        [
+            _incident_to_dict(incident, include_events=False)
+            for incident in store.incidents
+        ],
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): "ha_forensic_lab/incidents/get",
+        probatio.Required("incident_id"): str,
+    }
+)
+@callback
+def websocket_incidents_get(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return one saved incident with its frozen events."""
+    store = _incident_store_or_error(hass, connection, msg["id"])
+    if store is None:
+        return
+
+    incident = store.get(msg["incident_id"])
+    if incident is None:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Saved forensic incident not found",
+        )
+        return
+
+    connection.send_result(
+        msg["id"],
+        _incident_to_dict(incident, include_events=True),
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): "ha_forensic_lab/incidents/create",
+        probatio.Required("target_event_id"): str,
+        probatio.Optional(
+            "before_seconds", default=DEFAULT_INCIDENT_BEFORE_SECONDS
+        ): probatio.All(
+            probatio.Coerce(float),
+            probatio.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
+        ),
+        probatio.Optional(
+            "after_seconds", default=DEFAULT_INCIDENT_AFTER_SECONDS
+        ): probatio.All(
+            probatio.Coerce(float),
+            probatio.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
+        ),
+        probatio.Optional("title"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_incidents_create(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Freeze a bounded incident around one event from the rolling buffer."""
+    capture = _capture_or_error(hass, connection, msg["id"])
+    if capture is None:
+        return
+
+    store = _incident_store_or_error(hass, connection, msg["id"])
+    if store is None:
+        return
+
+    try:
+        incident = create_incident(
+            capture.events,
+            msg["target_event_id"],
+            before_seconds=msg["before_seconds"],
+            after_seconds=msg["after_seconds"],
+            title=msg.get("title"),
+        )
+    except KeyError:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Target forensic event not found in the current capture buffer",
+        )
+        return
+    except ValueError as err:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_INVALID_FORMAT,
+            str(err),
+        )
+        return
+
+    try:
+        await store.async_add(incident)
+    except IncidentLimitReached as err:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_INVALID_FORMAT,
+            str(err),
+        )
+        return
+
+    connection.send_result(
+        msg["id"],
+        _incident_to_dict(incident, include_events=False),
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        probatio.Required("type"): "ha_forensic_lab/incidents/delete",
+        probatio.Required("incident_id"): str,
+    }
+)
+@websocket_api.async_response
+async def websocket_incidents_delete(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Delete one saved forensic incident."""
+    store = _incident_store_or_error(hass, connection, msg["id"])
+    if store is None:
+        return
+
+    try:
+        await store.async_delete(msg["incident_id"])
+    except KeyError:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Saved forensic incident not found",
+        )
+        return
+
+    connection.send_result(msg["id"])
+
+
 def _capture_or_error(
     hass: HomeAssistant,
     connection: websocket_api.ActiveConnection,
@@ -127,6 +299,42 @@ def _capture_or_error(
         "HA Forensic Lab capture is not running",
     )
     return None
+
+
+def _incident_store_or_error(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg_id: int,
+) -> IncidentStore | None:
+    store = hass.data.get(DOMAIN, {}).get(DATA_INCIDENT_STORE)
+    if isinstance(store, IncidentStore):
+        return store
+
+    connection.send_error(
+        msg_id,
+        websocket_api.ERR_NOT_FOUND,
+        "HA Forensic Lab incident store is not loaded",
+    )
+    return None
+
+
+def _incident_to_dict(
+    incident: Incident,
+    *,
+    include_events: bool,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "incident_id": incident.incident_id,
+        "title": incident.title,
+        "created_at": incident.created_at,
+        "target_event_id": incident.target_event_id,
+        "window_start": incident.window_start,
+        "window_end": incident.window_end,
+        "event_count": incident.event_count,
+    }
+    if include_events:
+        result["events"] = [event_to_dict(event) for event in incident.events]
+    return result
 
 
 def _explanation_to_dict(explanation: ForensicExplanation) -> dict[str, Any]:

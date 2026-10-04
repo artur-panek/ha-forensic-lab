@@ -13,6 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 from .capture import ForensicCapture
 from .const import (
     DATA_CAPTURE,
+    DATA_INCIDENT_STORE,
     DATA_STORE,
     DOMAIN,
     NAME,
@@ -21,6 +22,7 @@ from .const import (
     PANEL_STATIC_URL,
     PANEL_URL_PATH,
 )
+from .incident_store import IncidentStore
 from .store import RollingForensicStore
 from .websocket import async_register_websocket_api
 
@@ -62,9 +64,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         existing_capture.stop()
     if existing_store := domain_data.pop(DATA_STORE, None):
         await existing_store.async_flush()
+    domain_data.pop(DATA_INCIDENT_STORE, None)
 
     store = RollingForensicStore(hass)
     restored_events = await store.async_load()
+
+    incident_store = IncidentStore(hass)
+    await incident_store.async_load()
 
     capture = ForensicCapture(
         hass,
@@ -75,6 +81,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     capture.start()
     domain_data[DATA_CAPTURE] = capture
+    domain_data[DATA_INCIDENT_STORE] = incident_store
     domain_data[DATA_STORE] = store
 
     if not async_panel_exists(hass, PANEL_URL_PATH):
@@ -99,6 +106,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         capture.stop()
     if store := domain_data.pop(DATA_STORE, None):
         await store.async_flush()
+    domain_data.pop(DATA_INCIDENT_STORE, None)
 
     if async_panel_exists(hass, PANEL_URL_PATH):
         frontend.async_remove_panel(hass, PANEL_URL_PATH)

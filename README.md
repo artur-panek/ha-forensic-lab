@@ -7,7 +7,7 @@ HA Forensic Lab is an experimental Home Assistant custom integration for reconst
 The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
 
 > [!IMPORTANT]
-> HA Forensic Lab is pre-alpha. The current development stack captures a bounded normalized runtime event stream, persists rolling snapshots through Home Assistant storage, exposes an admin-only timeline, and supports deterministic context-based reconstruction for captured state changes.
+> HA Forensic Lab is pre-alpha. The current development stack captures and persists a bounded normalized runtime stream, provides an admin-only timeline, supports deterministic context reconstruction, and can freeze durable saved incidents.
 
 ## The problem
 
@@ -40,70 +40,40 @@ The first useful release is intentionally small:
 - sanitized incident export
 - native Home Assistant sidebar panel
 
-See [docs/v0.1-scope.md](docs/v0.1-scope.md), [docs/architecture.md](docs/architecture.md), [docs/event-model.md](docs/event-model.md), [docs/persistence.md](docs/persistence.md) and [docs/websocket-api.md](docs/websocket-api.md).
-
-## Repository layout
-
-~~~text
-custom_components/ha_forensic_lab/
-├── __init__.py
-├── capture.py
-├── causality.py
-├── config_flow.py
-├── const.py
-├── models.py
-├── query.py
-├── storage_codec.py
-├── store.py
-├── websocket.py
-├── manifest.json
-├── strings.json
-├── translations/
-├── frontend/
-└── brand/
-~~~
-
-The repository follows the HACS integration layout from the start.
+See the docs directory for architecture, event model, persistence, causality, incident and WebSocket details.
 
 ## Current status
 
-The integration can be added through Home Assistant's UI and registers an admin-only sidebar panel.
+Implemented in the development stack:
 
-The capture layer listens for:
+- capture state changes, service calls, automation triggers and script starts
+- bounded 2048-event rolling buffer
+- private atomic rolling snapshot persistence
+- admin-only searchable timeline
+- deterministic context-based **Explain this change**
+- durable saved incidents in a separate private store
+- incident create/list/get/delete WebSocket API
+- explicit evidence gaps instead of timing guesses
 
-- state changes
-- service calls
-- automation triggers
-- script starts
+Saved incidents are bounded to 50 records and 500 frozen events per record.
 
-It stores only a compact normalized representation in a bounded 2048-event buffer. The same bounded snapshot is written to Home Assistant's private storage at a fixed maximum delay and restored on the next setup.
+Still intentionally missing from v0.1:
 
-No raw event payloads or complete service data are persisted.
-
-The sidebar timeline can currently:
-
-- display newest runtime events
-- filter by entity
-- filter by event type
-- show state transitions and service targets
-- expose context, parent context, user and event identifiers as evidence metadata
-- report recorder buffer usage
-- refresh on demand
-- run **Explain this change** for captured state changes
-- inspect typed parent-context and same-context evidence without conflating shared context with direct causation
-- see explicit gaps when the bounded buffer cannot support a complete reconstruction
-
-The frontend talks only to the admin-only Home Assistant WebSocket API; it does not read internal storage directly.
+- sanitized incident export
+- trace ingestion
+- timing-only correlated evidence
+- anomaly detection
+- AI root-cause summaries
 
 ## Persistence caveat
 
-Rolling persistence is not a write-ahead log. A hard process or host crash can lose the newest events since the most recent completed snapshot, normally roughly the configured 10-second interval. Clean unloads flush immediately.
+Rolling persistence is not a write-ahead log. A hard process or host crash can lose the newest rolling events since the most recent completed snapshot, normally roughly the configured 10-second interval. Clean unloads flush immediately.
 
-See [docs/persistence.md](docs/persistence.md).
+Saved incidents are explicit user actions and are written immediately.
 
 ## Development
 
-This repository validates changes with:
+Validation includes:
 
 - Home Assistant hassfest
 - HACS repository validation
@@ -112,15 +82,13 @@ This repository validates changes with:
 - frontend JavaScript syntax checks
 - pytest
 
-See [CONTRIBUTING.md](CONTRIBUTING.md).
-
 ## Security and privacy
 
-Forensic captures may contain entity names, service metadata, user IDs and automation context. Richer future evidence may be more sensitive, so exports must be sanitized by default and the analysis panel is admin-only.
+The panel and WebSocket API are admin-only.
 
-The current UI HTML-escapes values returned from Home Assistant before rendering them. Persistent normalized snapshots use Home Assistant's private storage mode.
+Persistent rolling snapshots and saved incidents use Home Assistant private storage mode. Raw event payloads and complete service data are not retained.
 
-Please report security issues as described in [SECURITY.md](SECURITY.md).
+The current UI HTML-escapes values returned from Home Assistant before rendering them.
 
 ## License
 
