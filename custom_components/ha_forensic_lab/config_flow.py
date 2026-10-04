@@ -22,6 +22,7 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_CAPTURE_BUFFER_SIZE,
     CONF_CAPTURE_EVENT_KINDS,
+    CONF_CAPTURE_UNCHANGED_STATES,
     CONF_EXCLUDED_DOMAINS,
     CONF_EXCLUDED_ENTITIES,
     CONF_PERSIST_INTERVAL_SECONDS,
@@ -118,6 +119,10 @@ class HAForensicLabOptionsFlow(OptionsFlow):
                         )
                     ),
                     vol.Optional(
+                        CONF_CAPTURE_UNCHANGED_STATES,
+                        default=options[CONF_CAPTURE_UNCHANGED_STATES],
+                    ): bool,
+                    vol.Optional(
                         CONF_EXCLUDED_ENTITIES,
                         default=options[CONF_EXCLUDED_ENTITIES],
                     ): EntitySelector(EntitySelectorConfig(multiple=True)),
@@ -141,6 +146,7 @@ def _default_options() -> dict[str, Any]:
         CONF_CAPTURE_BUFFER_SIZE: DEFAULT_CAPTURE_BUFFER_SIZE,
         CONF_PERSIST_INTERVAL_SECONDS: DEFAULT_PERSIST_INTERVAL_SECONDS,
         CONF_CAPTURE_EVENT_KINDS: list(_DEFAULT_EVENT_KINDS),
+        CONF_CAPTURE_UNCHANGED_STATES: False,
         CONF_EXCLUDED_ENTITIES: [],
         CONF_EXCLUDED_DOMAINS: [],
     }

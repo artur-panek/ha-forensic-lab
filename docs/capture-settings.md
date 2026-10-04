@@ -16,6 +16,17 @@ This is an event-count bound, not a time promise. A busy installation may rotate
 through 2048 events quickly; a quiet installation may retain the same events for
 much longer.
 
+A full buffer continues recording by evicting its oldest event for each new one.
+The panel's **Retained span** is the difference between the oldest and newest
+timestamps in the entire buffer, independent of timeline filters and page size.
+It describes retained events, not a guarantee of complete or continuous history.
+
+Timeline entity/kind filters only change the displayed results. To reduce capture
+volume, use the integration options below. For example, exclude a device-clock
+entity if its frequent timestamp changes are irrelevant to an investigation.
+Increasing capacity to 8192 retains up to four times as many events and increases
+memory/storage use; changing the persistence interval does not extend history.
+
 Reducing the capacity immediately rebuilds the in-memory deque at the new bound.
 The next rolling persistence write replaces the older larger snapshot.
 
@@ -42,6 +53,24 @@ The four normalized runtime evidence types can be enabled independently:
 
 An empty selection is valid and effectively pauses new forensic capture without
 removing saved incidents.
+
+## Unchanged-state updates
+
+Default: **off**
+
+HA can emit `state_changed` when attributes change or an integration forces an
+update even though the state string stays the same. With **Capture unchanged-state
+updates** off, entries such as `playing → playing` and `50 → 50` are filtered
+before retention and persistence. They increment `dropped_unchanged_state`.
+
+Real state changes, including numeric sensors, entity creation/removal and
+availability transitions, remain eligible for capture. Service calls, automation
+triggers and script starts still follow their existing kind/exclusion settings.
+
+Enable the option when investigating attribute-triggered automations. It retains
+the update's timestamp and context, but does not start storing attributes.
+The default also applies to existing entries without this option, and restored
+rolling snapshots are filtered on reload. Saved incidents are not rewritten.
 
 ## Excluded entities
 

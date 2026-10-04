@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tests.support import load_module
 
 const = load_module("const")
@@ -16,6 +18,8 @@ def _event(
     entity_id: str | None = None,
     domain: str | None = None,
     targets: tuple[str, ...] = (),
+    old_state: str | None = None,
+    new_state: str | None = None,
 ):
     return models.ForensicEvent(
         event_id=event_id,
@@ -27,6 +31,8 @@ def _event(
         entity_id=entity_id,
         domain=domain,
         target_entity_ids=targets,
+        old_state=old_state,
+        new_state=new_state,
     )
 
 
@@ -150,3 +156,41 @@ def test_empty_kind_selection_disables_capture_without_falling_back() -> None:
         policy.apply(_event("state", entity_id="light.hallway", domain="light"))
         is None
     )
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "include_unchanged", "retained"),
+    [
+        ("playing", "playing", False, False),
+        ("50", "50", False, False),
+        ("unknown", "unknown", False, False),
+        ("playing", "playing", True, True),
+        ("50", "51", False, True),
+        ("unavailable", "on", False, True),
+        (None, "on", False, True),
+        ("on", None, False, True),
+    ],
+)
+def test_unchanged_state_policy_preserves_transitions_and_lifecycle(
+    old, new, include_unchanged, retained
+):
+    policy = policy_module.CapturePolicy.from_options(
+        {const.CONF_CAPTURE_UNCHANGED_STATES: include_unchanged}
+    )
+    event = _event("state", old_state=old, new_state=new)
+    decision = policy.evaluate(event)
+
+    if retained:
+        assert decision.event is event
+        assert decision.drop_reason is None
+    else:
+        assert decision.event is None
+        assert decision.drop_reason.value == "unchanged_state"
+
+
+def test_default_policy_removes_unchanged_updates_from_restored_buffer():
+    unchanged = _event("unchanged", old_state="50", new_state="50")
+    changed = _event("changed", old_state="50", new_state="51")
+    policy = policy_module.CapturePolicy.from_options({})
+
+    assert policy.filter_snapshot((unchanged, changed)) == (changed,)

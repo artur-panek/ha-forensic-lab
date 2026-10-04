@@ -8,20 +8,22 @@ from typing import Any, Protocol
 from .const import (
     CONF_CAPTURE_BUFFER_SIZE,
     CONF_CAPTURE_EVENT_KINDS,
+    CONF_CAPTURE_UNCHANGED_STATES,
     CONF_EXCLUDED_DOMAINS,
     CONF_EXCLUDED_ENTITIES,
     CONF_PERSIST_INTERVAL_SECONDS,
     DEFAULT_CAPTURE_BUFFER_SIZE,
     DEFAULT_PERSIST_INTERVAL_SECONDS,
 )
-from .models import ForensicEventKind
+from .models import ForensicEvent, ForensicEventKind
+from .query import retained_span_seconds
 
 
 class CaptureDiagnosticsSource(Protocol):
     """Minimal capture shape needed for aggregate diagnostics."""
 
     @property
-    def events(self) -> tuple[Any, ...]:
+    def events(self) -> tuple[ForensicEvent, ...]:
         """Return retained events."""
 
     @property
@@ -61,7 +63,8 @@ def build_runtime_diagnostics(
     default_kinds = [kind.value for kind in ForensicEventKind]
     enabled_kinds = list(options.get(CONF_CAPTURE_EVENT_KINDS, default_kinds))
 
-    rolling_size = len(capture.events) if capture is not None else 0
+    snapshot = capture.events if capture is not None else ()
+    rolling_size = len(snapshot)
     rolling_capacity = (
         capture.max_events
         if capture is not None
@@ -96,6 +99,9 @@ def build_runtime_diagnostics(
                 )
             ),
             "enabled_event_kinds": enabled_kinds,
+            "capture_unchanged_states": options.get(
+                CONF_CAPTURE_UNCHANGED_STATES, False
+            ),
             "excluded_entity_count": len(
                 options.get(CONF_EXCLUDED_ENTITIES, [])
             ),
@@ -106,6 +112,7 @@ def build_runtime_diagnostics(
         "rolling_buffer": {
             "events": rolling_size,
             "capacity": rolling_capacity,
+            "retained_span_seconds": retained_span_seconds(snapshot),
             "utilization_percent": round(
                 (rolling_size / rolling_capacity) * 100,
                 3,

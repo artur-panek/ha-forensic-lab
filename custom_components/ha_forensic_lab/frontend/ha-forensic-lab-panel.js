@@ -10,6 +10,7 @@ class HAForensicLabPanel extends HTMLElement {
       events: [],
       buffer_size: 0,
       buffer_capacity: 0,
+      retained_span_seconds: null,
     };
     this._filters = {
       entityId: "",
@@ -118,6 +119,7 @@ class HAForensicLabPanel extends HTMLElement {
         events: Array.isArray(data.events) ? data.events : [],
         buffer_size: Number(data.buffer_size) || 0,
         buffer_capacity: Number(data.buffer_capacity) || 0,
+        retained_span_seconds: data.retained_span_seconds ?? null,
       };
       this._hasLoaded = true;
     } catch (error) {
@@ -597,7 +599,7 @@ class HAForensicLabPanel extends HTMLElement {
   _statsView(returnedCount) {
     const size = this._data.buffer_size || 0;
     const capacity = this._data.buffer_capacity || 0;
-    const utilization = capacity > 0 ? Math.round((size / capacity) * 100) : 0;
+    const full = capacity > 0 && size >= capacity;
 
     return (
       '<section class="stats" aria-label="Capture status">' +
@@ -608,13 +610,28 @@ class HAForensicLabPanel extends HTMLElement {
       this._escape(capacity || "—") +
       '</span><span class="stat-label">Buffer capacity</span></div>' +
       '<div class="stat"><span class="stat-value">' +
-      this._escape(utilization + "%") +
-      '</span><span class="stat-label">Buffer used</span></div>' +
+      this._escape(size ? this._formatSpan(this._data.retained_span_seconds) : "—") +
+      '</span><span class="stat-label">Retained span</span></div>' +
       '<div class="stat"><span class="stat-value">' +
       this._escape(returnedCount) +
       '</span><span class="stat-label">Events shown</span></div>' +
-      "</section>"
+      '</section><p class="buffer-note">' +
+      (full
+        ? "Rolling buffer full: new events replace the oldest. "
+        : "The rolling buffer keeps the latest events. ") +
+      'Timeline filters only change this view. <a href="/config/integrations/integration/ha_forensic_lab">Capture settings</a></p>'
     );
+  }
+
+  _formatSpan(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "—";
+    const total = Math.floor(seconds);
+    if (total < 60) return `${total}s`;
+    const minutes = Math.floor(total / 60);
+    if (minutes < 60) return `${minutes}m ${total % 60}s`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ${minutes % 60}m`;
+    return `${Math.floor(hours / 24)}d ${hours % 24}h`;
   }
 
   _recorderHealthView() {
@@ -652,7 +669,8 @@ class HAForensicLabPanel extends HTMLElement {
       Number(capture.dropped_disabled_kind || 0) +
       Number(capture.dropped_excluded_entity || 0) +
       Number(capture.dropped_excluded_domain || 0) +
-      Number(capture.dropped_excluded_targets || 0);
+      Number(capture.dropped_excluded_targets || 0) +
+      Number(capture.dropped_unchanged_state || 0);
     const persistenceLabel =
       Number(persistence.failed_writes || 0) > 0
         ? String(persistence.failed_writes) + " save errors reported"
@@ -681,7 +699,7 @@ class HAForensicLabPanel extends HTMLElement {
         this._formatMetric(capture.retained_events, 0) +
           " / " +
           this._formatMetric(dropped, 0),
-        "Retained / dropped"
+        "Accepted / filtered this session"
       ) +
       this._healthMetric(
         this._formatMetric(rolling.utilization_percent, 1) + "%",
@@ -694,7 +712,11 @@ class HAForensicLabPanel extends HTMLElement {
       this._escape(
         Number(persistence.completed_writes || 0) + " save calls returned"
       ) +
-      '</span><span class="health-privacy">Aggregate counters only · no forensic payloads</span></div>' +
+      '</span><span>' +
+      this._escape(Number(capture.evicted_events || 0)) +
+      ' evicted this session</span><span>' +
+      this._escape(Number(capture.dropped_unchanged_state || 0)) +
+      ' unchanged updates skipped</span></div>' +
       "</section>"
     );
   }

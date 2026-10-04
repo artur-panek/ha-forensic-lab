@@ -57,6 +57,10 @@ evidence.
 
 ## Capture filters do not rewrite saved incidents
 
+Unchanged-state updates are skipped by default, including updates that only
+change attributes. Enable **Capture unchanged-state updates** when investigating
+attribute-triggered automations; the recorder still omits attribute values.
+
 Changing excluded entities/domains re-filters the rolling recorder and restored
 rolling snapshot.
 
