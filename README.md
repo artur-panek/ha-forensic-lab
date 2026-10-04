@@ -7,7 +7,7 @@ HA Forensic Lab is an experimental Home Assistant custom integration for reconst
 The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
 
 > [!IMPORTANT]
-> HA Forensic Lab is pre-alpha. The current development stack captures and persists a bounded normalized runtime stream, provides an admin-only timeline, supports deterministic context reconstruction, freezes durable saved incidents, and can generate safe-profile sanitized incident bundles.
+> HA Forensic Lab is pre-alpha. The current development stack captures and persists a bounded normalized runtime stream, provides an admin-only timeline, supports deterministic context reconstruction, freezes durable saved incidents, and exports safe-profile sanitized incident bundles directly from the sidebar.
 
 ## The problem
 
@@ -51,9 +51,10 @@ Implemented in the development stack:
 - private atomic rolling snapshot persistence
 - admin-only searchable timeline
 - deterministic context-based **Explain this change**
+- **Save incident** directly from a state-change event
 - durable saved incidents in a separate private store
-- incident create/list/get/delete API
-- safe-profile sanitized ZIP export API
+- saved-incident list and management in the sidebar
+- safe-profile sanitized ZIP export and download from the sidebar
 - explicit evidence gaps instead of timing guesses
 
 Saved incidents are bounded to 50 records and 500 frozen events per record.
@@ -62,7 +63,6 @@ Safe export preserves diagnostic structure but pseudonymizes identifiers, remove
 
 Still intentionally missing from v0.1:
 
-- saved-incidents/export UI
 - trace ingestion
 - timing-only correlated evidence
 - anomaly detection

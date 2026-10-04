@@ -23,6 +23,14 @@ class HAForensicLabPanel extends HTMLElement {
     this._explainLoading = false;
     this._explainError = null;
     this._explainRequestId = 0;
+    this._incidents = [];
+    this._incidentsLoaded = false;
+    this._incidentsLoading = false;
+    this._incidentsError = null;
+    this._savingEventId = null;
+    this._exportingIncidentId = null;
+    this._deletingIncidentId = null;
+    this._incidentNotice = null;
   }
 
   connectedCallback() {
@@ -30,6 +38,9 @@ class HAForensicLabPanel extends HTMLElement {
 
     if (this._hass && !this._hasLoaded && !this._loading) {
       void this._loadTimeline();
+    }
+    if (this._hass && !this._incidentsLoaded && !this._incidentsLoading) {
+      void this._loadIncidents();
     }
   }
 
@@ -40,6 +51,14 @@ class HAForensicLabPanel extends HTMLElement {
 
     if (firstConnection && value && !this._hasLoaded && !this._loading) {
       void this._loadTimeline();
+    }
+    if (
+      firstConnection &&
+      value &&
+      !this._incidentsLoaded &&
+      !this._incidentsLoading
+    ) {
+      void this._loadIncidents();
     }
   }
 
@@ -100,6 +119,170 @@ class HAForensicLabPanel extends HTMLElement {
         this._render();
       }
     }
+  }
+
+  async _loadIncidents() {
+    if (!this._hass || this._incidentsLoading) {
+      return;
+    }
+
+    this._incidentsLoading = true;
+    this._incidentsError = null;
+    this._render();
+
+    try {
+      const data = await this._hass.callWS({
+        type: "ha_forensic_lab/incidents/list",
+      });
+      this._incidents = Array.isArray(data) ? data : [];
+      this._incidentsLoaded = true;
+    } catch (error) {
+      this._incidentsError =
+        error && error.message
+          ? String(error.message)
+          : "Unable to load saved incidents";
+      this._incidentsLoaded = true;
+    } finally {
+      this._incidentsLoading = false;
+      this._render();
+    }
+  }
+
+  async _saveIncident(eventId) {
+    if (!this._hass || !eventId || this._savingEventId) {
+      return;
+    }
+
+    this._savingEventId = eventId;
+    this._incidentNotice = null;
+    this._incidentsError = null;
+    this._render();
+
+    let saved = false;
+    try {
+      const incident = await this._hass.callWS({
+        type: "ha_forensic_lab/incidents/create",
+        target_event_id: eventId,
+      });
+      this._incidentNotice =
+        "Saved " +
+        String(incident.event_count || 0) +
+        " frozen events as " +
+        String(incident.title || "incident") +
+        ".";
+      saved = true;
+    } catch (error) {
+      this._incidentsError =
+        error && error.message
+          ? String(error.message)
+          : "Unable to save incident";
+    } finally {
+      this._savingEventId = null;
+    }
+
+    if (saved) {
+      await this._loadIncidents();
+    } else {
+      this._render();
+    }
+  }
+
+  async _exportIncident(incidentId) {
+    if (!this._hass || !incidentId || this._exportingIncidentId) {
+      return;
+    }
+
+    this._exportingIncidentId = incidentId;
+    this._incidentNotice = null;
+    this._render();
+
+    try {
+      const bundle = await this._hass.callWS({
+        type: "ha_forensic_lab/incidents/export",
+        incident_id: incidentId,
+      });
+      this._downloadExportBundle(bundle);
+      const digest = bundle.sha256 ? String(bundle.sha256).slice(0, 12) : null;
+      this._incidentNotice =
+        "Safe export prepared" +
+        (digest ? " · SHA-256 " + digest + "…" : "") +
+        ".";
+    } catch (error) {
+      this._incidentsError =
+        error && error.message
+          ? String(error.message)
+          : "Unable to export incident";
+    } finally {
+      this._exportingIncidentId = null;
+      this._render();
+    }
+  }
+
+  async _deleteIncident(incidentId) {
+    if (!this._hass || !incidentId || this._deletingIncidentId) {
+      return;
+    }
+
+    if (
+      !globalThis.confirm(
+        "Delete this saved incident? This removes its frozen evidence permanently."
+      )
+    ) {
+      return;
+    }
+
+    this._deletingIncidentId = incidentId;
+    this._incidentNotice = null;
+    this._incidentsError = null;
+    this._render();
+
+    let deleted = false;
+    try {
+      await this._hass.callWS({
+        type: "ha_forensic_lab/incidents/delete",
+        incident_id: incidentId,
+      });
+      this._incidentNotice = "Saved incident deleted.";
+      deleted = true;
+    } catch (error) {
+      this._incidentsError =
+        error && error.message
+          ? String(error.message)
+          : "Unable to delete incident";
+    } finally {
+      this._deletingIncidentId = null;
+    }
+
+    if (deleted) {
+      await this._loadIncidents();
+    } else {
+      this._render();
+    }
+  }
+
+  _downloadExportBundle(bundle) {
+    if (!bundle || bundle.encoding !== "base64" || !bundle.data) {
+      throw new Error("Export bundle has an unsupported encoding");
+    }
+
+    const binary = globalThis.atob(String(bundle.data));
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+
+    const blob = new Blob([bytes], {
+      type: bundle.content_type || "application/zip",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = bundle.filename || "ha-forensic-lab-incident.zip";
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    globalThis.setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   async _loadExplanation(eventId) {
@@ -167,6 +350,7 @@ class HAForensicLabPanel extends HTMLElement {
     const status = this._statusView();
     const content = this._contentView(events);
     const explanation = this._explanationView();
+    const incidents = this._incidentsView();
 
     this.shadowRoot.innerHTML =
       this._styles() +
@@ -181,6 +365,7 @@ class HAForensicLabPanel extends HTMLElement {
       '</header>' +
       this._statsView(events.length) +
       this._filtersView() +
+      incidents +
       explanation +
       content +
       '<footer>Evidence-first by design. This view shows normalized runtime metadata only; raw event payloads are not exposed.</footer>' +
@@ -344,7 +529,8 @@ class HAForensicLabPanel extends HTMLElement {
     const selected = event.event_id === this._selectedEventId;
     const explainAction =
       event.kind === "state_changed"
-        ? '<div class="event-actions"><button class="button button-small explain-button" type="button" data-explain-id="' +
+        ? '<div class="event-actions">' +
+          '<button class="button button-small explain-button" type="button" data-explain-id="' +
           this._escape(event.event_id) +
           '"' +
           (this._explainLoading && selected ? " disabled" : "") +
@@ -352,6 +538,15 @@ class HAForensicLabPanel extends HTMLElement {
           (this._explainLoading && selected
             ? "Reconstructing…"
             : "Explain this change") +
+          "</button>" +
+          '<button class="button button-small save-incident-button" type="button" data-save-event-id="' +
+          this._escape(event.event_id) +
+          '"' +
+          (this._savingEventId === event.event_id ? " disabled" : "") +
+          ">" +
+          (this._savingEventId === event.event_id
+            ? "Saving…"
+            : "Save incident") +
           "</button></div>"
         : "";
 
@@ -486,6 +681,102 @@ class HAForensicLabPanel extends HTMLElement {
     );
   }
 
+
+
+  _incidentsView() {
+    const incidents = this._incidents || [];
+    const notice = this._incidentNotice
+      ? '<div class="incident-notice">' +
+        this._escape(this._incidentNotice) +
+        "</div>"
+      : "";
+    const error = this._incidentsError
+      ? '<div class="incident-error">' +
+        this._escape(this._incidentsError) +
+        "</div>"
+      : "";
+
+    if (this._incidentsLoading && !this._incidentsLoaded) {
+      return (
+        '<section class="incidents-panel">' +
+        '<div class="section-heading"><div><span class="section-kicker">Frozen evidence</span><h2>Saved incidents</h2></div></div>' +
+        '<div class="incident-empty"><div class="spinner" aria-hidden="true"></div><span>Loading saved incidents…</span></div>' +
+        "</section>"
+      );
+    }
+
+    const cards = incidents.length
+      ? '<div class="incident-list">' +
+        incidents.map((incident) => this._incidentCard(incident)).join("") +
+        "</div>"
+      : '<div class="incident-empty"><strong>No saved incidents yet.</strong><span>Use Save incident on a state change to freeze evidence before the rolling buffer moves on.</span></div>';
+
+    return (
+      '<section class="incidents-panel">' +
+      '<div class="section-heading incident-heading"><div><span class="section-kicker">Frozen evidence</span><h2>Saved incidents</h2></div>' +
+      '<div class="incident-heading-actions"><span class="incident-count">' +
+      this._escape(incidents.length) +
+      " / 50</span>" +
+      '<button class="button button-small" id="refresh-incidents" type="button"' +
+      (this._incidentsLoading ? " disabled" : "") +
+      ">Refresh</button></div></div>" +
+      notice +
+      error +
+      cards +
+      '<p class="incident-help">Exports always use the safe sanitizer profile. There is no raw-export option in v0.1.</p>' +
+      "</section>"
+    );
+  }
+
+  _incidentCard(incident) {
+    const incidentId = String(incident.incident_id || "");
+    const createdAt = this._formatDateTime(incident.created_at);
+    const eventCount = Number(incident.event_count) || 0;
+    const duration = Math.max(
+      0,
+      Number(incident.window_end || 0) - Number(incident.window_start || 0)
+    );
+    const exporting = this._exportingIncidentId === incidentId;
+    const deleting = this._deletingIncidentId === incidentId;
+
+    return (
+      '<article class="incident-card"><div class="incident-main"><strong class="incident-title">' +
+      this._escape(incident.title || "Saved incident") +
+      '</strong><div class="incident-meta"><span>' +
+      this._escape(eventCount) +
+      " events</span><span>" +
+      this._escape(Math.round(duration)) +
+      ' s window</span><time title="' +
+      this._escape(createdAt) +
+      '">' +
+      this._escape(this._formatIncidentDate(incident.created_at)) +
+      "</time></div></div>" +
+      '<div class="incident-actions">' +
+      '<button class="button button-small primary export-incident-button" type="button" data-incident-id="' +
+      this._escape(incidentId) +
+      '"' +
+      (exporting ? " disabled" : "") +
+      ">" +
+      (exporting ? "Preparing ZIP…" : "Export safe ZIP") +
+      "</button>" +
+      '<button class="button button-small quiet delete-incident-button" type="button" data-incident-id="' +
+      this._escape(incidentId) +
+      '"' +
+      (deleting ? " disabled" : "") +
+      ">" +
+      (deleting ? "Deleting…" : "Delete") +
+      "</button></div></article>"
+    );
+  }
+
+  _formatIncidentDate(timestamp) {
+    const value = Number(timestamp);
+    if (!Number.isFinite(value)) {
+      return "Unknown date";
+    }
+
+    return new Date(value * 1000).toLocaleString();
+  }
 
   _explanationView() {
     if (!this._selectedEventId) {
@@ -696,6 +987,8 @@ class HAForensicLabPanel extends HTMLElement {
       this.shadowRoot.getElementById("close-explanation");
     const retryExplanation =
       this.shadowRoot.getElementById("retry-explanation");
+    const refreshIncidents =
+      this.shadowRoot.getElementById("refresh-incidents");
 
     if (form) {
       form.addEventListener("submit", (event) => {
@@ -752,6 +1045,45 @@ class HAForensicLabPanel extends HTMLElement {
         }
       });
     });
+
+    this.shadowRoot
+      .querySelectorAll(".save-incident-button")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const eventId = button.dataset.saveEventId;
+          if (eventId) {
+            void this._saveIncident(eventId);
+          }
+        });
+      });
+
+    this.shadowRoot
+      .querySelectorAll(".export-incident-button")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const incidentId = button.dataset.incidentId;
+          if (incidentId) {
+            void this._exportIncident(incidentId);
+          }
+        });
+      });
+
+    this.shadowRoot
+      .querySelectorAll(".delete-incident-button")
+      .forEach((button) => {
+        button.addEventListener("click", () => {
+          const incidentId = button.dataset.incidentId;
+          if (incidentId) {
+            void this._deleteIncident(incidentId);
+          }
+        });
+      });
+
+    if (refreshIncidents) {
+      refreshIncidents.addEventListener("click", () => {
+        void this._loadIncidents();
+      });
+    }
   }
 
   _kindLabel(kind) {
@@ -846,7 +1178,8 @@ class HAForensicLabPanel extends HTMLElement {
       ".event-card.selected{border-color:var(--primary-color);box-shadow:0 0 0 1px var(--primary-color)}" +
       ".event-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.event-heading{display:flex;min-width:0;gap:9px;align-items:center;flex-wrap:wrap}.kind{padding:4px 7px;border-radius:7px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.68rem;font-weight:750;letter-spacing:.05em;text-transform:uppercase}.event-title{min-width:0;font-size:.98rem;overflow-wrap:anywhere}" +
       ".time{white-space:nowrap;color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.event-summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;line-height:1.45}.state-value{font-weight:650}.arrow,.muted{color:var(--secondary-text-color)}" +
-      ".event-actions{display:flex;gap:8px;margin-top:11px}.button-small{min-height:34px;padding:0 10px;font-size:.78rem}" +
+      ".event-actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}.button-small{min-height:34px;padding:0 10px;font-size:.78rem}" +
+      ".incidents-panel{margin:0 0 28px;padding:18px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none)}.incident-heading{align-items:center}.incident-heading-actions{display:flex;gap:8px;align-items:center}.incident-count{color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.incident-list{display:grid;gap:9px}.incident-card{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:13px 14px;border:1px solid var(--divider-color);border-radius:12px;background:var(--primary-background-color)}.incident-main{min-width:0}.incident-title{display:block;overflow-wrap:anywhere}.incident-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:5px;color:var(--secondary-text-color);font-size:.75rem}.incident-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}.incident-empty{display:flex;gap:10px;align-items:center;padding:18px;border:1px dashed var(--divider-color);border-radius:12px;color:var(--secondary-text-color);font-size:.84rem}.incident-empty strong{color:var(--primary-text-color)}.incident-notice,.incident-error{margin:0 0 10px;padding:9px 11px;border-radius:9px;font-size:.8rem}.incident-notice{background:var(--secondary-background-color);border-left:3px solid var(--success-color,#4caf50)}.incident-error{background:var(--secondary-background-color);border-left:3px solid var(--error-color,#db4437)}.incident-help{margin:11px 0 0;color:var(--secondary-text-color);font-size:.74rem;line-height:1.45}" +
       "code{max-width:100%;padding:2px 5px;border-radius:5px;background:var(--secondary-background-color);font-family:var(--code-font-family,ui-monospace,SFMono-Regular,Consolas,monospace);font-size:.86em;overflow-wrap:anywhere}" +
       "details{margin-top:11px;padding-top:9px;border-top:1px solid var(--divider-color)}summary{width:max-content;color:var(--secondary-text-color);font-size:.78rem;cursor:pointer}.metadata{display:grid;gap:6px;margin-top:9px}.metadata-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:baseline;font-size:.78rem}.metadata-row>span{color:var(--secondary-text-color)}" +
       ".explain-panel{margin:0 0 28px;padding:20px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none);scroll-margin-top:16px}" +
@@ -855,7 +1188,7 @@ class HAForensicLabPanel extends HTMLElement {
       ".chain-heading{margin:20px 0 10px}.chain-heading h3{margin:3px 0 0;font-size:1rem}.explain-chain{display:grid;max-width:900px}.chain-node{padding:13px 14px;border:1px solid var(--divider-color);border-radius:12px;background:var(--primary-background-color)}.chain-node.target{border-color:var(--primary-color);box-shadow:0 0 0 1px var(--primary-color)}.chain-node-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.chain-node-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;color:var(--secondary-text-color);font-size:.75rem}.target-label{padding:3px 6px;border-radius:6px;background:var(--primary-color);color:var(--text-primary-color,#fff);font-weight:700}.evidence-connector{display:grid;grid-template-columns:18px 1fr;gap:9px;min-height:46px;align-items:center;padding:3px 10px;color:var(--secondary-text-color)}.connector-line{justify-self:center;width:2px;height:100%;min-height:34px;background:var(--divider-color)}.evidence-connector.parent .connector-line{background:var(--primary-color)}.evidence-connector strong{display:block;color:var(--primary-text-color);font-size:.78rem}.evidence-connector span:not(.connector-line){display:block;margin-top:2px;font-size:.74rem;line-height:1.35}.explain-loading,.explain-error{display:flex;gap:12px;align-items:center;margin-top:16px;padding:20px;border:1px dashed var(--divider-color);border-radius:12px}.explain-loading p,.explain-error p{margin:3px 0 0;color:var(--secondary-text-color);font-size:.82rem}" +
       ".state-card{display:grid;justify-items:center;gap:8px;padding:48px 24px;border:1px dashed var(--divider-color);border-radius:16px;text-align:center;background:var(--card-background-color)}.state-card p{max-width:580px;margin:0;color:var(--secondary-text-color);line-height:1.5}.error-card{border-style:solid}.spinner{width:24px;height:24px;border:3px solid var(--divider-color);border-top-color:var(--primary-color);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}" +
       "footer{margin-top:30px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.5}" +
-      "@media(max-width:820px){main{padding:24px 16px 48px}.hero{display:grid}.status{width:max-content}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}form{grid-template-columns:1fr}.actions{flex-wrap:wrap}.event{grid-template-columns:20px minmax(0,1fr)}.event-head,.chain-node-head{display:grid;gap:7px}.time{order:-1}.metadata-row{grid-template-columns:1fr;gap:2px}.explain-head{display:grid}.explain-head-actions{justify-content:space-between;order:-1}.evidence-status{order:2}}" +
+      "@media(max-width:820px){main{padding:24px 16px 48px}.hero{display:grid}.status{width:max-content}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}form{grid-template-columns:1fr}.actions{flex-wrap:wrap}.event{grid-template-columns:20px minmax(0,1fr)}.event-head,.chain-node-head{display:grid;gap:7px}.time{order:-1}.metadata-row{grid-template-columns:1fr;gap:2px}.explain-head{display:grid}.explain-head-actions{justify-content:space-between;order:-1}.evidence-status{order:2}.incident-card{display:grid}.incident-actions{flex-wrap:wrap}.incident-heading{align-items:flex-start}.incident-heading-actions{flex-wrap:wrap}}" +
       "</style>"
     );
   }
