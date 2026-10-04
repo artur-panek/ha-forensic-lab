@@ -94,3 +94,20 @@ Diagnostics are available in two admin-only forms:
 
 The WebSocket command exists so the Forensic Lab panel can show a small recorder
 health view without gaining access to forensic payload internals.
+
+
+## Sidebar recorder health
+
+The sidebar consumes the same admin-only aggregate diagnostics command.
+
+It intentionally shows only a compact operational summary:
+
+- average capture callback duration
+- maximum capture callback duration
+- retained vs dropped events
+- rolling-buffer utilization
+- persistence pending/failure status and completed-write count
+
+The view does not set hard performance thresholds in v0.1. Alpha data should
+inform any future warning levels instead of treating an arbitrary millisecond
+number as unhealthy.

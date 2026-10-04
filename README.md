@@ -56,6 +56,7 @@ Implemented in the development stack:
 - configurable bounded rolling capacity (256–8192 events)
 - configurable rolling persistence cadence (5–60 seconds)
 - privacy-safe runtime diagnostics and recorder performance counters
+- compact Recorder health view in the sidebar
 - private atomic rolling snapshot persistence
 - admin-only searchable timeline
 - deterministic context-based **Explain this change**

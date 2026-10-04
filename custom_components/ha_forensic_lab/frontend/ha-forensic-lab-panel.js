@@ -41,6 +41,10 @@ class HAForensicLabPanel extends HTMLElement {
     this._incidentReview = null;
     this._incidentReviewLoading = false;
     this._incidentReviewError = null;
+    this._diagnostics = null;
+    this._diagnosticsLoaded = false;
+    this._diagnosticsLoading = false;
+    this._diagnosticsError = null;
   }
 
   connectedCallback() {
@@ -51,6 +55,13 @@ class HAForensicLabPanel extends HTMLElement {
     }
     if (this._hass && !this._incidentsLoaded && !this._incidentsLoading) {
       void this._loadIncidents();
+    }
+    if (
+      this._hass &&
+      !this._diagnosticsLoaded &&
+      !this._diagnosticsLoading
+    ) {
+      void this._loadDiagnostics();
     }
   }
 
@@ -69,6 +80,14 @@ class HAForensicLabPanel extends HTMLElement {
       !this._incidentsLoading
     ) {
       void this._loadIncidents();
+    }
+    if (
+      firstConnection &&
+      value &&
+      !this._diagnosticsLoaded &&
+      !this._diagnosticsLoading
+    ) {
+      void this._loadDiagnostics();
     }
   }
 
@@ -128,6 +147,32 @@ class HAForensicLabPanel extends HTMLElement {
         this._loading = false;
         this._render();
       }
+    }
+  }
+
+  async _loadDiagnostics() {
+    if (!this._hass || this._diagnosticsLoading) {
+      return;
+    }
+
+    this._diagnosticsLoading = true;
+    this._diagnosticsError = null;
+    this._render();
+
+    try {
+      this._diagnostics = await this._hass.callWS({
+        type: "ha_forensic_lab/diagnostics",
+      });
+      this._diagnosticsLoaded = true;
+    } catch (error) {
+      this._diagnosticsError =
+        error && error.message
+          ? String(error.message)
+          : "Unable to read recorder diagnostics";
+      this._diagnosticsLoaded = true;
+    } finally {
+      this._diagnosticsLoading = false;
+      this._render();
     }
   }
 
@@ -513,6 +558,7 @@ class HAForensicLabPanel extends HTMLElement {
     const explanation = this._explanationView();
     const incidents = this._incidentsView();
     const savedReview = this._savedIncidentReviewView();
+    const recorderHealth = this._recorderHealthView();
 
     this.shadowRoot.innerHTML =
       this._styles() +
@@ -526,6 +572,7 @@ class HAForensicLabPanel extends HTMLElement {
       status +
       '</header>' +
       this._statsView(events.length) +
+      recorderHealth +
       this._filtersView() +
       incidents +
       savedReview +
@@ -582,6 +629,106 @@ class HAForensicLabPanel extends HTMLElement {
       '</span><span class="stat-label">Events shown</span></div>' +
       "</section>"
     );
+  }
+
+  _recorderHealthView() {
+    const data = this._diagnostics;
+
+    if (this._diagnosticsLoading && !this._diagnosticsLoaded) {
+      return (
+        '<section class="health-panel">' +
+        '<div class="section-heading health-heading"><div><span class="section-kicker">Recorder health</span><h2>Runtime overhead</h2></div></div>' +
+        '<div class="health-state"><div class="spinner" aria-hidden="true"></div><span>Reading aggregate recorder diagnostics…</span></div>' +
+        "</section>"
+      );
+    }
+
+    if (this._diagnosticsError) {
+      return (
+        '<section class="health-panel">' +
+        '<div class="section-heading health-heading"><div><span class="section-kicker">Recorder health</span><h2>Runtime overhead</h2></div>' +
+        '<button class="button button-small" id="refresh-diagnostics" type="button">Retry</button></div>' +
+        '<div class="health-error">' +
+        this._escape(this._diagnosticsError) +
+        "</div></section>"
+      );
+    }
+
+    if (!data) {
+      return "";
+    }
+
+    const capture = data.capture || {};
+    const persistence = data.persistence || {};
+    const rolling = data.rolling_buffer || {};
+    const dropped =
+      Number(capture.normalization_drops || 0) +
+      Number(capture.dropped_disabled_kind || 0) +
+      Number(capture.dropped_excluded_entity || 0) +
+      Number(capture.dropped_excluded_domain || 0) +
+      Number(capture.dropped_excluded_targets || 0);
+    const persistenceLabel =
+      Number(persistence.failed_writes || 0) > 0
+        ? String(persistence.failed_writes) + " failed writes"
+        : persistence.pending_save
+          ? "write pending"
+          : "idle · no failures";
+
+    return (
+      '<section class="health-panel">' +
+      '<div class="section-heading health-heading"><div><span class="section-kicker">Recorder health</span><h2>Runtime overhead</h2></div>' +
+      '<button class="button button-small" id="refresh-diagnostics" type="button"' +
+      (this._diagnosticsLoading ? " disabled" : "") +
+      ">" +
+      (this._diagnosticsLoading ? "Refreshing…" : "Refresh") +
+      "</button></div>" +
+      '<div class="health-grid">' +
+      this._healthMetric(
+        this._formatMetric(capture.handler_average_ms, 3) + " ms",
+        "Callback average"
+      ) +
+      this._healthMetric(
+        this._formatMetric(capture.handler_max_ms, 3) + " ms",
+        "Callback maximum"
+      ) +
+      this._healthMetric(
+        this._formatMetric(capture.retained_events, 0) +
+          " / " +
+          this._formatMetric(dropped, 0),
+        "Retained / dropped"
+      ) +
+      this._healthMetric(
+        this._formatMetric(rolling.utilization_percent, 1) + "%",
+        "Rolling buffer used"
+      ) +
+      "</div>" +
+      '<div class="health-foot"><span>Persistence: <strong>' +
+      this._escape(persistenceLabel) +
+      "</strong></span><span>" +
+      this._escape(
+        Number(persistence.completed_writes || 0) + " completed writes"
+      ) +
+      '</span><span class="health-privacy">Aggregate counters only · no forensic payloads</span></div>' +
+      "</section>"
+    );
+  }
+
+  _healthMetric(value, label) {
+    return (
+      '<div class="health-metric"><strong>' +
+      this._escape(value) +
+      '</strong><span>' +
+      this._escape(label) +
+      "</span></div>"
+    );
+  }
+
+  _formatMetric(value, decimals) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return "—";
+    }
+    return decimals > 0 ? numeric.toFixed(decimals) : String(Math.round(numeric));
   }
 
   _filtersView() {
@@ -1493,6 +1640,8 @@ class HAForensicLabPanel extends HTMLElement {
       this.shadowRoot.getElementById("close-incident-review");
     const retryIncidentReview =
       this.shadowRoot.getElementById("retry-incident-review");
+    const refreshDiagnostics =
+      this.shadowRoot.getElementById("refresh-diagnostics");
 
     if (form) {
       form.addEventListener("submit", (event) => {
@@ -1611,6 +1760,12 @@ class HAForensicLabPanel extends HTMLElement {
         void this._reviewIncident(this._reviewIncidentId);
       });
     }
+
+    if (refreshDiagnostics) {
+      refreshDiagnostics.addEventListener("click", () => {
+        void this._loadDiagnostics();
+      });
+    }
   }
 
   _kindLabel(kind) {
@@ -1689,6 +1844,7 @@ class HAForensicLabPanel extends HTMLElement {
       ".stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}" +
       ".stat{display:flex;flex-direction:column;gap:3px;padding:15px 16px;border:1px solid var(--divider-color);border-radius:14px;background:var(--card-background-color)}" +
       ".stat-value{font-size:1.25rem;font-weight:700;font-variant-numeric:tabular-nums}.stat-label{color:var(--secondary-text-color);font-size:.78rem}" +
+      ".health-panel{margin:0 0 14px;padding:16px;border:1px solid var(--divider-color);border-radius:16px;background:var(--card-background-color)}.health-heading{align-items:center}.health-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.health-metric{display:grid;gap:3px;padding:10px 11px;border-radius:10px;background:var(--secondary-background-color)}.health-metric strong{font-size:.95rem;font-variant-numeric:tabular-nums}.health-metric span{color:var(--secondary-text-color);font-size:.7rem}.health-foot{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px;color:var(--secondary-text-color);font-size:.7rem}.health-foot strong{color:var(--primary-text-color)}.health-privacy{margin-left:auto}.health-state{display:flex;gap:9px;align-items:center;padding:11px;color:var(--secondary-text-color);font-size:.8rem}.health-error{padding:10px 11px;border-left:3px solid var(--error-color,#db4437);background:var(--secondary-background-color);font-size:.78rem}" +
       ".toolbar{margin-bottom:28px;padding:16px;border:1px solid var(--divider-color);border-radius:16px;background:var(--card-background-color)}" +
       "form{display:grid;grid-template-columns:minmax(240px,1fr) minmax(190px,.45fr) auto;gap:12px;align-items:end}" +
       ".field{display:grid;gap:6px;color:var(--secondary-text-color);font-size:.78rem;font-weight:650}" +
@@ -1716,7 +1872,7 @@ class HAForensicLabPanel extends HTMLElement {
       ".trace-panel{margin-top:22px;padding-top:18px;border-top:1px solid var(--divider-color)}.trace-head{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}.trace-head h3{margin:4px 0 5px;font-size:1rem}.trace-identity{margin-top:5px}.trace-badge{padding:5px 8px;border-radius:999px;background:var(--secondary-background-color);color:var(--primary-text-color);font-size:.7rem;font-weight:750;white-space:nowrap}.muted-badge{color:var(--secondary-text-color)}.trace-state{display:flex;gap:12px;align-items:center;margin-top:12px;padding:14px;border:1px dashed var(--divider-color);border-radius:11px}.trace-state p{margin:3px 0 0;color:var(--secondary-text-color);font-size:.8rem;line-height:1.45}.trace-facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;margin-top:12px}.trace-fact{display:grid;grid-template-columns:80px minmax(0,1fr);gap:8px;align-items:baseline;padding:8px 10px;border-radius:9px;background:var(--secondary-background-color);font-size:.75rem}.trace-fact>span{color:var(--secondary-text-color)}.trace-steps{display:grid;gap:7px;margin-top:13px}.trace-step{display:grid;grid-template-columns:26px minmax(0,1fr);gap:9px;align-items:start;padding:10px 11px;border:1px solid var(--divider-color);border-radius:10px;background:var(--primary-background-color)}.trace-index{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.68rem;font-weight:750}.trace-step-body{min-width:0}.trace-path{line-height:1.35}.trace-outcomes{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.trace-outcome{padding:3px 6px;border-radius:6px;background:var(--secondary-background-color);font-size:.68rem;color:var(--secondary-text-color)}.trace-child{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:7px;color:var(--secondary-text-color);font-size:.7rem}.trace-warning{margin-top:11px;padding:8px 10px;border-left:3px solid var(--warning-color,#ff9800);background:var(--secondary-background-color);font-size:.76rem}.trace-privacy{display:grid;gap:3px;margin-top:12px;padding:10px 11px;border-radius:9px;background:var(--secondary-background-color);font-size:.72rem;line-height:1.45}.trace-privacy span{color:var(--secondary-text-color)}" +
       ".state-card{display:grid;justify-items:center;gap:8px;padding:48px 24px;border:1px dashed var(--divider-color);border-radius:16px;text-align:center;background:var(--card-background-color)}.state-card p{max-width:580px;margin:0;color:var(--secondary-text-color);line-height:1.5}.error-card{border-style:solid}.spinner{width:24px;height:24px;border:3px solid var(--divider-color);border-top-color:var(--primary-color);border-radius:50%;animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}" +
       "footer{margin-top:30px;color:var(--secondary-text-color);font-size:.78rem;line-height:1.5}" +
-      "@media(max-width:820px){main{padding:24px 16px 48px}.hero{display:grid}.status{width:max-content}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}form{grid-template-columns:1fr}.actions{flex-wrap:wrap}.event{grid-template-columns:20px minmax(0,1fr)}.event-head,.chain-node-head{display:grid;gap:7px}.time{order:-1}.metadata-row{grid-template-columns:1fr;gap:2px}.explain-head{display:grid}.explain-head-actions{justify-content:space-between;order:-1}.evidence-status{order:2}.incident-card{display:grid}.incident-actions{flex-wrap:wrap}.incident-heading{align-items:flex-start}.incident-heading-actions{flex-wrap:wrap}.trace-head{display:grid}.trace-facts{grid-template-columns:1fr}.trace-fact{grid-template-columns:70px minmax(0,1fr)}}" +
+      "@media(max-width:820px){main{padding:24px 16px 48px}.hero{display:grid}.status{width:max-content}.stats{grid-template-columns:repeat(2,minmax(0,1fr))}.health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.health-privacy{margin-left:0}form{grid-template-columns:1fr}.actions{flex-wrap:wrap}.event{grid-template-columns:20px minmax(0,1fr)}.event-head,.chain-node-head{display:grid;gap:7px}.time{order:-1}.metadata-row{grid-template-columns:1fr;gap:2px}.explain-head{display:grid}.explain-head-actions{justify-content:space-between;order:-1}.evidence-status{order:2}.incident-card{display:grid}.incident-actions{flex-wrap:wrap}.incident-heading{align-items:flex-start}.incident-heading-actions{flex-wrap:wrap}.trace-head{display:grid}.trace-facts{grid-template-columns:1fr}.trace-fact{grid-template-columns:70px minmax(0,1fr)}}" +
       "</style>"
     );
   }
