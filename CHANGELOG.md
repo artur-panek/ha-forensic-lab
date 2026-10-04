@@ -41,6 +41,8 @@ First alpha candidate.
 
 ### Fixed during candidate audit
 
+- preview incident event counts and adjust the before/after window in the panel
+  before saving; preserve draft values after errors and keep the 500-event bound
 - skip unchanged-state updates by default, with an opt-in for attribute-based
   investigations; report retained time span, filtered updates and buffer evictions
 - use matching voluptuous schemas and validation exceptions on HA 2026.9.4

@@ -473,6 +473,40 @@ input:focus,select:focus {
   gap: 9px
 }
 
+.incident-draft {
+  grid-template-columns: minmax(0,1fr);
+  margin: 0 0 16px;
+  padding: 16px;
+  border: 1px solid var(--primary-color);
+  border-radius: 12px;
+  scroll-margin-top: 16px
+}
+
+.incident-draft-heading {
+  display: grid;
+  gap: 6px;
+  overflow-wrap: anywhere
+}
+
+.incident-draft-heading span {
+  color: var(--secondary-text-color);
+  font-size: .8rem
+}
+
+.incident-window-fields {
+  display: grid;
+  grid-template-columns: repeat(2,minmax(0,1fr));
+  gap: 12px
+}
+
+.incident-draft .actions {
+  flex-wrap: wrap
+}
+
+.incident-draft .incident-help {
+  margin: 0
+}
+
 .incident-card {
   display: flex;
   justify-content: space-between;

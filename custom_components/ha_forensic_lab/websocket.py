@@ -24,9 +24,11 @@ from .incident_store import IncidentLimitReached, IncidentStore
 from .incidents import (
     DEFAULT_INCIDENT_AFTER_SECONDS,
     DEFAULT_INCIDENT_BEFORE_SECONDS,
+    MAX_INCIDENT_EVENTS,
     MAX_INCIDENT_WINDOW_SECONDS,
     Incident,
     create_incident,
+    select_incident_window,
 )
 from .models import ForensicEventKind
 from .query import event_to_dict, query_events, retained_span_seconds
@@ -38,6 +40,15 @@ MAX_TIMELINE_LIMIT = 500
 DEFAULT_EXPLAIN_LIMIT = 50
 MAX_EXPLAIN_LIMIT = 100
 _EVENT_KINDS = tuple(kind.value for kind in ForensicEventKind)
+_INCIDENT_WINDOW_FIELDS = {
+    vol.Required("target_event_id"): str,
+    vol.Optional(
+        "before_seconds", default=DEFAULT_INCIDENT_BEFORE_SECONDS
+    ): vol.All(vol.Coerce(float), vol.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS)),
+    vol.Optional(
+        "after_seconds", default=DEFAULT_INCIDENT_AFTER_SECONDS
+    ): vol.All(vol.Coerce(float), vol.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS)),
+}
 
 
 @callback
@@ -48,6 +59,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, websocket_incidents_list)
     websocket_api.async_register_command(hass, websocket_incidents_get)
     websocket_api.async_register_command(hass, websocket_incidents_review)
+    websocket_api.async_register_command(hass, websocket_incidents_preview)
     websocket_api.async_register_command(hass, websocket_incidents_create)
     websocket_api.async_register_command(hass, websocket_incidents_delete)
     websocket_api.async_register_command(hass, websocket_incidents_export)
@@ -241,20 +253,57 @@ def websocket_incidents_review(
 @websocket_api.require_admin
 @websocket_api.websocket_command(
     {
+        vol.Required("type"): "ha_forensic_lab/incidents/preview",
+        **_INCIDENT_WINDOW_FIELDS,
+    }
+)
+@callback
+def websocket_incidents_preview(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Count a proposed incident without saving or truncating evidence."""
+    capture = _capture_or_error(hass, connection, msg["id"])
+    if capture is None:
+        return
+
+    try:
+        window = select_incident_window(
+            capture.events,
+            msg["target_event_id"],
+            before_seconds=msg["before_seconds"],
+            after_seconds=msg["after_seconds"],
+        )
+    except KeyError:
+        connection.send_error(
+            msg["id"],
+            websocket_api.ERR_NOT_FOUND,
+            "Target forensic event not found in the current capture buffer",
+        )
+        return
+    except ValueError as err:
+        connection.send_error(msg["id"], websocket_api.ERR_INVALID_FORMAT, str(err))
+        return
+
+    event_count = len(window.events)
+    connection.send_result(
+        msg["id"],
+        {
+            "event_count": event_count,
+            "max_events": MAX_INCIDENT_EVENTS,
+            "can_save": event_count <= MAX_INCIDENT_EVENTS,
+            "window_start": window.window_start,
+            "window_end": window.window_end,
+        },
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
         vol.Required("type"): "ha_forensic_lab/incidents/create",
-        vol.Required("target_event_id"): str,
-        vol.Optional(
-            "before_seconds", default=DEFAULT_INCIDENT_BEFORE_SECONDS
-        ): vol.All(
-            vol.Coerce(float),
-            vol.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
-        ),
-        vol.Optional(
-            "after_seconds", default=DEFAULT_INCIDENT_AFTER_SECONDS
-        ): vol.All(
-            vol.Coerce(float),
-            vol.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
-        ),
+        **_INCIDENT_WINDOW_FIELDS,
         vol.Optional("title"): str,
         vol.Optional("trace_evidence"): dict,
     }

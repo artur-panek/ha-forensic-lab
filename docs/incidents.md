@@ -13,6 +13,17 @@ The default capture window is:
 
 Both sides can be adjusted up to 3600 seconds. Only events already in the buffer are frozen; saving does not wait for the future side of the window.
 
+In the panel, **Save incident** opens a form with an optional title and seconds
+before/after the target. The initial preview counts all retained events in that
+window, including events outside the current timeline filters. If the count
+exceeds 500, shorten the times and click **Preview window**. Saving is enabled
+once the preview fits the limit. Editing either time invalidates the preview;
+editing the title does not.
+
+The preview does not reserve or save events. Creation rechecks the live buffer,
+so the count can change and the target can be evicted while the form is open.
+A failed save preserves the form values so the window can be adjusted or retried.
+
 The incident stores:
 
 - a generated incident ID
@@ -52,6 +63,7 @@ The admin-only WebSocket API exposes:
 - ha_forensic_lab/incidents/list
 - ha_forensic_lab/incidents/get
 - ha_forensic_lab/incidents/review
+- ha_forensic_lab/incidents/preview
 - ha_forensic_lab/incidents/create
 - ha_forensic_lab/incidents/delete
 - ha_forensic_lab/incidents/export

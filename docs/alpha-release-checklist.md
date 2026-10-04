@@ -41,6 +41,8 @@ the behavior has been verified and recorded in the test report.
 - [ ] same-context sequence is not presented as direct causation
 - [ ] evidence gaps are visible
 - [ ] live trace enrichment works for retained automation/script traces
+- [ ] incident preview counts a busy window, allows narrowing below 500, and saves the chosen window
+- [ ] incident form preserves its title and window after a failed save
 - [ ] saved incidents survive restart
 - [ ] saved incident Review works without the live rolling buffer
 - [ ] safe ZIP export works
