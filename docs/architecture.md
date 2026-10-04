@@ -68,7 +68,7 @@ Large or sensitive payloads should be separated from the searchable index.
 
 ## 3. Evidence edges
 
-Causal analysis produces directed edges between normalized events.
+Causal analysis produces typed relationships between normalized event anchors.
 
 Each edge carries:
 
@@ -77,27 +77,32 @@ source_event_id
 target_event_id
 evidence_class
 evidence_type
-evidence_detail?
+source_context_id?
+target_context_id?
 ~~~
 
-### Confirmed
+### Confirmed does not always mean direct causation
 
-Examples:
+Two deterministic relationship types are currently modeled:
 
-- matching Home Assistant context ID
-- parent-context relationship
-- direct trace relationship
-- explicit runtime identifier connecting two steps
+- **parent_context**: the child Home Assistant context explicitly points to the parent context that started it.
+- **same_context_sequence**: events are confirmed to belong to the same Home Assistant context and are shown in captured order.
+
+A same-context sequence is **not** a claim that the earlier event directly caused the later event. It is a confirmed relationship plus chronology.
+
+The parent-context event shown by HA Forensic Lab is a captured anchor for the parent context. When several events share that parent context, the tool must not pretend one specific event is uniquely proven to be the trigger.
 
 ### Correlated
 
-Examples:
+Future correlation may use evidence such as:
 
 - close timestamps
-- entity change immediately following a relevant service call when context is unavailable
+- an entity change following a relevant service call when context is unavailable
 - surrounding events that are useful to inspect but cannot be proven causal
 
 Correlation must never be displayed as confirmed causation.
+
+See [context causality](causality.md) for the current deterministic rules.
 
 ## 4. Storage
 
@@ -167,16 +172,16 @@ HA Forensic Lab must fail open with respect to the smart home:
 
 ## v0.1 module direction
 
-The foundation intentionally creates only the integration shell. Expected modules as implementation begins:
+The implementation is being introduced in narrow layers:
 
 ~~~text
 capture.py
 models.py
-store.py
+query.py
 causality.py
 websocket.py
 incidents.py
 sanitizer.py
 ~~~
 
-These files should be introduced only when their responsibility is implemented.
+Persistence, incidents and sanitization should be introduced only when their responsibility is implemented.

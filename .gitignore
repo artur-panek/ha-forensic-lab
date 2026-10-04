@@ -10,3 +10,4 @@ venv/
 .vscode/
 coverage.xml
 htmlcov/
+dist/

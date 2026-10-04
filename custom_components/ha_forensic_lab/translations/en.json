@@ -4,11 +4,33 @@
     "step": {
       "user": {
         "title": "Set up HA Forensic Lab",
-        "description": "Create a local, admin-only forensic workspace for Home Assistant. This pre-alpha build only installs the project shell and sidebar panel."
+        "description": "Create a local, admin-only forensic workspace for Home Assistant."
       }
     },
     "abort": {
       "single_instance_allowed": "Only one HA Forensic Lab instance can be configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Capture and retention",
+        "description": "Control how much normalized forensic evidence is retained. Excluded events are dropped before rolling persistence.",
+        "data": {
+          "capture_buffer_size": "Rolling event capacity",
+          "persist_interval_seconds": "Maximum persistence interval (seconds)",
+          "capture_event_kinds": "Captured event types",
+          "excluded_entities": "Excluded entities",
+          "excluded_domains": "Excluded domains"
+        },
+        "data_description": {
+          "capture_buffer_size": "Maximum normalized events held in the rolling buffer (256–8192).",
+          "persist_interval_seconds": "Maximum delay before a dirty rolling snapshot is written (5–60 seconds).",
+          "capture_event_kinds": "Only selected runtime event types enter the forensic buffer.",
+          "excluded_entities": "Events for these entities are discarded before retention and persistence.",
+          "excluded_domains": "Type a Home Assistant domain such as camera or person. Matching events and service targets are discarded before persistence."
+        }
+      }
     }
   }
 }

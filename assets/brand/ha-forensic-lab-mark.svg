@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">HA Forensic Lab mark</title>
+  <desc id="desc">A cyan runtime waveform flows into a graphite magnifying glass containing trace nodes, with one amber evidence node.</desc>
+  <defs>
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#25D9F1"/>
+      <stop offset="1" stop-color="#0789A8"/>
+    </linearGradient>
+    <linearGradient id="graphite" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#263742"/>
+      <stop offset="1" stop-color="#111C24"/>
+    </linearGradient>
+  </defs>
+
+  <path d="M38 255 H78 C94 255 98 200 114 200 C130 200 132 310 150 310 C168 310 171 140 193 140 C215 140 219 312 239 312 C259 312 262 219 281 219 C294 219 300 246 318 246"
+        fill="none" stroke="url(#cyan)" stroke-width="24"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="38" cy="255" r="13" fill="#0F7188"/>
+
+  <circle cx="338" cy="239" r="115"
+          fill="none" stroke="url(#graphite)" stroke-width="30"/>
+  <path d="M416 324 L474 382"
+        fill="none" stroke="url(#graphite)" stroke-width="34"
+        stroke-linecap="round"/>
+
+  <path d="M285 246 H333 L372 207 M333 246 L372 285"
+        fill="none" stroke="#1E313C" stroke-width="18"
+        stroke-linecap="round" stroke-linejoin="round"/>
+
+  <circle cx="285" cy="246" r="23" fill="#19C8E4" stroke="#18303B" stroke-width="10"/>
+  <circle cx="333" cy="246" r="20" fill="#19C8E4" stroke="#18303B" stroke-width="10"/>
+  <circle cx="372" cy="207" r="20" fill="#19C8E4" stroke="#18303B" stroke-width="10"/>
+  <circle cx="372" cy="285" r="20" fill="#FFB21B" stroke="#18303B" stroke-width="10"/>
+</svg>

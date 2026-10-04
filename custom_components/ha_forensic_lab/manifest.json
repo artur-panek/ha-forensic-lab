@@ -7,7 +7,8 @@
   "config_flow": true,
   "dependencies": [
     "frontend",
-    "http"
+    "http",
+    "trace"
   ],
   "documentation": "https://github.com/artur-panek/ha-forensic-lab",
   "integration_type": "service",
@@ -15,5 +16,5 @@
   "issue_tracker": "https://github.com/artur-panek/ha-forensic-lab/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.0.1"
+  "version": "0.1.0-alpha.1"
 }

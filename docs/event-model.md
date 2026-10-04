@@ -1,7 +1,6 @@
 # Runtime event model
 
-The first capture layer deliberately keeps a **small forensic index**, not raw
-Home Assistant event payloads.
+The capture layer deliberately keeps a **small forensic index**, not raw Home Assistant event payloads.
 
 ## Captured event kinds
 
@@ -18,7 +17,7 @@ v0.1 currently normalizes four runtime event types:
 
 Every normalized event contains:
 
-- process-local event ID
+- event ID
 - event kind
 - event timestamp
 - context ID
@@ -47,29 +46,30 @@ This stage does **not** retain:
 
 That is intentional. Those values are frequently large and can be sensitive.
 
-Future richer evidence should be stored separately, bounded independently, and
-only when it materially improves incident reconstruction.
+Future richer evidence should be stored separately, bounded independently, and only when it materially improves incident reconstruction.
 
-## Event IDs
+## Event IDs and capture sessions
 
-The current event ID is process-local and generated from:
+Each capture process generates a random session namespace. New event IDs use:
 
-1. the Home Assistant event timestamp
-2. a monotonic capture sequence
+~~~text
+<session-id>:<monotonic-sequence>
+~~~
 
-It is suitable for linking events inside one capture session. It is not a
-persistent globally unique identifier and should not be treated as one.
+This keeps restored events from an earlier Home Assistant process distinct from new events captured after a restart.
+
+Event timestamps remain separate and are used for chronology and display.
 
 ## Retention
 
-The capture layer currently uses an in-memory deque capped at 2048 normalized
-events.
+The live capture buffer defaults to 2048 normalized events; integration options allow 256–8192 events.
 
-This is intentionally temporary:
+That same bounded snapshot is persisted through Home Assistant's private storage layer:
 
-- it proves the capture path without creating a database migration surface
-- memory cannot grow without bound
-- restart clears the buffer
-- no user runtime data is written to disk yet
+- the oldest event is evicted when the buffer reaches capacity
+- the persisted snapshot therefore cannot grow without bound
+- restored events are loaded before live capture starts
+- raw Home Assistant payloads are still not written
+- a clean integration unload flushes the newest snapshot immediately
 
-Persistent rolling storage belongs in the next storage-focused stage.
+See [rolling persistence](persistence.md) for write cadence and crash behavior.

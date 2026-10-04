@@ -1,34 +1,54 @@
 # Roadmap
 
-The roadmap is intentionally ordered around useful forensic capability, not feature count.
+The roadmap is ordered around useful forensic capability rather than feature
+count.
 
-## v0.1 — Incident reconstruction
+## v0.1 alpha — Incident reconstruction
 
-- bounded runtime recorder
-- normalized event model
+Implemented in the current alpha candidate:
+
+- bounded normalized runtime recorder
+- configurable capture scope and rolling retention
 - context and parent-context indexing
-- searchable timeline
-- confirmed vs correlated causal edges
-- Explain this change
-- saved incidents
-- sanitized incident export
+- searchable runtime timeline
+- deterministic evidence relationships
+- **Explain this change**
+- privacy-reduced live automation/script trace enrichment
+- durable saved incidents and saved-incident Review
+- safe-only sanitized incident export
+- privacy-safe runtime diagnostics and Recorder health
+- production branding
+- read-only real-instance smoke client
+- deterministic release packaging and release contract
 
-## v0.2 — Better evidence
+Release gates still outstanding until they are actually performed:
 
-- ingest relevant automation/script trace data
-- richer source filtering
-- graph navigation
-- trace-to-event linking
-- configurable capture filters
-- storage diagnostics and retention controls
+- run the full real-instance alpha matrix
+- verify restart/persistence behavior on a real Home Assistant installation
+- collect initial performance observations
+- confirm known limitations against the tested HA version
+- intentionally publish the first pre-release tag
 
-## v0.3 — Analysis workflows
+## v0.2 — Better investigation workflows
 
+Candidates after alpha feedback:
+
+- richer graph navigation for context and trace paths
 - incident comparison
-- reusable investigation filters
-- bookmarks/annotations
-- evidence bundle improvements
+- reusable investigation filters/bookmarks
+- better trace-to-event navigation
+- improved evidence-bundle summaries
+- carefully designed optional correlated evidence where deterministic context
+  is unavailable
+
+## v0.3 — Cross-tool workflows
+
+Potential directions:
+
 - optional integration points with HA Blast Radius
+- incident annotations
+- shareable investigation presets
+- compatibility/history views across Home Assistant releases
 
 ## Later, only if justified
 
@@ -37,4 +57,5 @@ The roadmap is intentionally ordered around useful forensic capability, not feat
 - assisted root-cause summaries
 - cross-instance analysis
 
-These are intentionally deferred until deterministic evidence collection is trustworthy.
+AI-generated causality remains deliberately out of scope until deterministic
+evidence collection is trustworthy and alpha feedback justifies it.
