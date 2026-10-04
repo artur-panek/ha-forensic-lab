@@ -21,6 +21,7 @@ The incident stores:
 - target event ID
 - requested window start/end
 - frozen normalized events
+- optional validated structural trace evidence when a matching live Home Assistant trace was available at save time
 
 ## Bounds
 
@@ -39,6 +40,10 @@ Saved incidents use a separate private Home Assistant Store file from the rollin
 Creating or deleting an incident writes the saved-incident collection immediately because these are explicit, infrequent user actions.
 
 Rolling-buffer eviction does not remove already saved incidents.
+
+Trace evidence is optional. An incident remains valid when Home Assistant has already evicted the richer automation/script trace; in that case the deterministic context evidence is still frozen normally.
+
+When trace evidence is supplied by the panel, the backend revalidates it against a strict allowlist before writing it to storage.
 
 ## API
 

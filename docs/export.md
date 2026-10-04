@@ -44,8 +44,11 @@ The following are retained because they materially help debugging:
 - service domain and service name
 - stable relationships between pseudonymized entity/event/context identifiers
 - a small allowlist of generic state values such as on/off/open/closed/idle/playing
+- safe trace paths, boolean condition outcomes and simple branch choices when frozen trace evidence is present
 
 The aliases are stable only within one exported incident. They are not intended to be stable identifiers across exports.
+
+When an incident contains frozen trace evidence, its automation/script identity, run ID and context ID are pseudonymized using the same per-export alias context. Raw Home Assistant trace payloads are never part of the bundle.
 
 ## Transport
 

@@ -22,6 +22,7 @@ from .incidents import (
 )
 from .models import ForensicEventKind
 from .query import event_to_dict, query_events
+from .trace_evidence import normalize_trace_evidence, trace_evidence_to_dict
 
 DEFAULT_TIMELINE_LIMIT = 100
 MAX_TIMELINE_LIMIT = 500
@@ -199,6 +200,7 @@ def websocket_incidents_get(
             probatio.Range(min=0, max=MAX_INCIDENT_WINDOW_SECONDS),
         ),
         probatio.Optional("title"): str,
+        probatio.Optional("trace_evidence"): dict,
     }
 )
 @websocket_api.async_response
@@ -223,6 +225,7 @@ async def websocket_incidents_create(
             before_seconds=msg["before_seconds"],
             after_seconds=msg["after_seconds"],
             title=msg.get("title"),
+            trace_evidence=normalize_trace_evidence(msg.get("trace_evidence")),
         )
     except KeyError:
         connection.send_error(
@@ -376,9 +379,11 @@ def _incident_to_dict(
         "window_start": incident.window_start,
         "window_end": incident.window_end,
         "event_count": incident.event_count,
+        "has_trace_evidence": incident.trace_evidence is not None,
     }
     if include_events:
         result["events"] = [event_to_dict(event) for event in incident.events]
+        result["trace_evidence"] = trace_evidence_to_dict(incident.trace_evidence)
     return result
 
 

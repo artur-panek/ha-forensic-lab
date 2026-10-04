@@ -9,6 +9,7 @@ from time import time
 from uuid import uuid4
 
 from .models import ForensicEvent
+from .trace_evidence import TraceEvidence
 
 DEFAULT_INCIDENT_BEFORE_SECONDS = 300.0
 DEFAULT_INCIDENT_AFTER_SECONDS = 60.0
@@ -32,6 +33,7 @@ class Incident:
     window_start: float
     window_end: float
     events: tuple[ForensicEvent, ...]
+    trace_evidence: TraceEvidence | None = None
 
     @property
     def event_count(self) -> int:
@@ -49,6 +51,7 @@ def create_incident(
     max_events: int = MAX_INCIDENT_EVENTS,
     incident_id: str | None = None,
     created_at: float | None = None,
+    trace_evidence: TraceEvidence | None = None,
 ) -> Incident:
     """Freeze a bounded time window around one captured event."""
     if before_seconds < 0 or after_seconds < 0:
@@ -91,6 +94,7 @@ def create_incident(
         window_start=window_start,
         window_end=window_end,
         events=selected,
+        trace_evidence=trace_evidence,
     )
 
 

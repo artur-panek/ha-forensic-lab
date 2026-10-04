@@ -7,6 +7,7 @@ from typing import Any
 
 from .incidents import Incident
 from .storage_codec import deserialize_events, serialize_events
+from .trace_evidence import normalize_trace_evidence, trace_evidence_to_dict
 
 
 def serialize_incidents(incidents: Iterable[Incident]) -> dict[str, Any]:
@@ -44,6 +45,7 @@ def _incident_to_dict(incident: Incident) -> dict[str, Any]:
         "window_start": incident.window_start,
         "window_end": incident.window_end,
         "events": serialize_events(incident.events)["events"],
+        "trace_evidence": trace_evidence_to_dict(incident.trace_evidence),
     }
 
 
@@ -64,6 +66,7 @@ def _incident_from_dict(raw: object) -> Incident:
         window_start=float(raw["window_start"]),
         window_end=float(raw["window_end"]),
         events=events,
+        trace_evidence=normalize_trace_evidence(raw.get("trace_evidence")),
     )
 
 

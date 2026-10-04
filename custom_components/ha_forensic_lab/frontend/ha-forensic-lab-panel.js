@@ -154,6 +154,28 @@ class HAForensicLabPanel extends HTMLElement {
     }
   }
 
+
+  _traceEvidenceForIncident(eventId) {
+    const trace = this._traceProjection;
+
+    if (
+      this._selectedEventId !== eventId ||
+      !trace ||
+      trace.status !== "available"
+    ) {
+      return null;
+    }
+
+    return {
+      reference: trace.reference,
+      state: trace.state ?? null,
+      script_execution: trace.script_execution ?? null,
+      last_step: trace.last_step ?? null,
+      steps: Array.isArray(trace.steps) ? trace.steps : [],
+      truncated: Boolean(trace.truncated),
+    };
+  }
+
   async _saveIncident(eventId) {
     if (!this._hass || !eventId || this._savingEventId) {
       return;
@@ -166,14 +188,22 @@ class HAForensicLabPanel extends HTMLElement {
 
     let saved = false;
     try {
-      const incident = await this._hass.callWS({
+      const request = {
         type: "ha_forensic_lab/incidents/create",
         target_event_id: eventId,
-      });
+      };
+      const traceEvidence = this._traceEvidenceForIncident(eventId);
+      if (traceEvidence) {
+        request.trace_evidence = traceEvidence;
+      }
+
+      const incident = await this._hass.callWS(request);
       this._incidentNotice =
         "Saved " +
         String(incident.event_count || 0) +
-        " frozen events as " +
+        " frozen events" +
+        (incident.has_trace_evidence ? " + trace evidence" : "") +
+        " as " +
         String(incident.title || "incident") +
         ".";
       saved = true;
@@ -621,11 +651,16 @@ class HAForensicLabPanel extends HTMLElement {
           '<button class="button button-small save-incident-button" type="button" data-save-event-id="' +
           this._escape(event.event_id) +
           '"' +
-          (this._savingEventId === event.event_id ? " disabled" : "") +
+          (this._savingEventId === event.event_id ||
+          (selected && this._traceLoading)
+            ? " disabled"
+            : "") +
           ">" +
           (this._savingEventId === event.event_id
             ? "Saving…"
-            : "Save incident") +
+            : selected && this._traceLoading
+              ? "Trace loading…"
+              : "Save incident") +
           "</button></div>"
         : "";
 
@@ -817,11 +852,16 @@ class HAForensicLabPanel extends HTMLElement {
     );
     const exporting = this._exportingIncidentId === incidentId;
     const deleting = this._deletingIncidentId === incidentId;
+    const traceBadge = incident.has_trace_evidence
+      ? '<span class="incident-trace-badge">trace frozen</span>'
+      : "";
 
     return (
       '<article class="incident-card"><div class="incident-main"><strong class="incident-title">' +
       this._escape(incident.title || "Saved incident") +
-      '</strong><div class="incident-meta"><span>' +
+      "</strong>" +
+      traceBadge +
+      '<div class="incident-meta"><span>' +
       this._escape(eventCount) +
       " events</span><span>" +
       this._escape(Math.round(duration)) +
@@ -1393,7 +1433,7 @@ class HAForensicLabPanel extends HTMLElement {
       ".event-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start}.event-heading{display:flex;min-width:0;gap:9px;align-items:center;flex-wrap:wrap}.kind{padding:4px 7px;border-radius:7px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.68rem;font-weight:750;letter-spacing:.05em;text-transform:uppercase}.event-title{min-width:0;font-size:.98rem;overflow-wrap:anywhere}" +
       ".time{white-space:nowrap;color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.event-summary{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:9px;line-height:1.45}.state-value{font-weight:650}.arrow,.muted{color:var(--secondary-text-color)}" +
       ".event-actions{display:flex;gap:8px;margin-top:11px;flex-wrap:wrap}.button-small{min-height:34px;padding:0 10px;font-size:.78rem}" +
-      ".incidents-panel{margin:0 0 28px;padding:18px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none)}.incident-heading{align-items:center}.incident-heading-actions{display:flex;gap:8px;align-items:center}.incident-count{color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.incident-list{display:grid;gap:9px}.incident-card{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:13px 14px;border:1px solid var(--divider-color);border-radius:12px;background:var(--primary-background-color)}.incident-main{min-width:0}.incident-title{display:block;overflow-wrap:anywhere}.incident-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:5px;color:var(--secondary-text-color);font-size:.75rem}.incident-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}.incident-empty{display:flex;gap:10px;align-items:center;padding:18px;border:1px dashed var(--divider-color);border-radius:12px;color:var(--secondary-text-color);font-size:.84rem}.incident-empty strong{color:var(--primary-text-color)}.incident-notice,.incident-error{margin:0 0 10px;padding:9px 11px;border-radius:9px;font-size:.8rem}.incident-notice{background:var(--secondary-background-color);border-left:3px solid var(--success-color,#4caf50)}.incident-error{background:var(--secondary-background-color);border-left:3px solid var(--error-color,#db4437)}.incident-help{margin:11px 0 0;color:var(--secondary-text-color);font-size:.74rem;line-height:1.45}" +
+      ".incidents-panel{margin:0 0 28px;padding:18px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none)}.incident-heading{align-items:center}.incident-heading-actions{display:flex;gap:8px;align-items:center}.incident-count{color:var(--secondary-text-color);font-size:.78rem;font-variant-numeric:tabular-nums}.incident-list{display:grid;gap:9px}.incident-card{display:flex;justify-content:space-between;gap:16px;align-items:center;padding:13px 14px;border:1px solid var(--divider-color);border-radius:12px;background:var(--primary-background-color)}.incident-main{min-width:0}.incident-title{display:inline;overflow-wrap:anywhere}.incident-trace-badge{display:inline-flex;margin-left:8px;padding:3px 6px;border-radius:999px;background:var(--secondary-background-color);color:var(--secondary-text-color);font-size:.65rem;font-weight:750;text-transform:uppercase;letter-spacing:.04em}.incident-meta{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:5px;color:var(--secondary-text-color);font-size:.75rem}.incident-actions{display:flex;gap:8px;align-items:center;flex-shrink:0}.incident-empty{display:flex;gap:10px;align-items:center;padding:18px;border:1px dashed var(--divider-color);border-radius:12px;color:var(--secondary-text-color);font-size:.84rem}.incident-empty strong{color:var(--primary-text-color)}.incident-notice,.incident-error{margin:0 0 10px;padding:9px 11px;border-radius:9px;font-size:.8rem}.incident-notice{background:var(--secondary-background-color);border-left:3px solid var(--success-color,#4caf50)}.incident-error{background:var(--secondary-background-color);border-left:3px solid var(--error-color,#db4437)}.incident-help{margin:11px 0 0;color:var(--secondary-text-color);font-size:.74rem;line-height:1.45}" +
       "code{max-width:100%;padding:2px 5px;border-radius:5px;background:var(--secondary-background-color);font-family:var(--code-font-family,ui-monospace,SFMono-Regular,Consolas,monospace);font-size:.86em;overflow-wrap:anywhere}" +
       "details{margin-top:11px;padding-top:9px;border-top:1px solid var(--divider-color)}summary{width:max-content;color:var(--secondary-text-color);font-size:.78rem;cursor:pointer}.metadata{display:grid;gap:6px;margin-top:9px}.metadata-row{display:grid;grid-template-columns:110px minmax(0,1fr);gap:10px;align-items:baseline;font-size:.78rem}.metadata-row>span{color:var(--secondary-text-color)}" +
       ".explain-panel{margin:0 0 28px;padding:20px;border:1px solid var(--divider-color);border-radius:18px;background:var(--card-background-color);box-shadow:var(--ha-card-box-shadow,none);scroll-margin-top:16px}" +

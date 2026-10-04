@@ -60,10 +60,23 @@ It deliberately drops:
 - arbitrary result payloads
 - trace timestamps
 
-The projection lives only in panel memory and is not written to HA Forensic Lab's rolling or incident stores.
+The raw Home Assistant trace never leaves this live-only boundary.
+
+When the user explicitly saves the currently explained event as an incident, the already reduced projection may be attached as **validated trace evidence**. The backend treats the client projection as untrusted input and re-normalizes it through an allowlist before persistence.
+
+Only the structural fields documented above can enter the incident store. Extra fields, variables, config, error text and arbitrary results cannot be persisted through the incident API.
 
 ## Evidence semantics
 
 Trace enrichment is additional execution evidence. It does not replace the context causality model.
 
 A trace can explain which branch/action path executed inside an automation or script. The context graph still determines how that run relates to the selected Home Assistant state change.
+
+
+## Frozen trace evidence
+
+Saving an incident while a matching trace projection is available freezes that safe structural projection together with the incident.
+
+If no retained Home Assistant trace exists, the incident is still saved normally with context evidence only.
+
+The saved projection remains bounded to 200 structural steps and is included in sanitized exports using pseudonymized automation/script, run and context identifiers.

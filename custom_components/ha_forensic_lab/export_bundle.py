@@ -39,6 +39,7 @@ def build_export_bundle(incident: Incident) -> ExportBundle:
         "sanitizer_profile": SANITIZER_PROFILE,
         "sanitizer_version": SANITIZER_VERSION,
         "event_count": sanitized["incident"]["event_count"],
+        "trace_evidence": sanitized["incident"]["trace_evidence"] is not None,
         "files": ["manifest.json", "incident.json", "summary.md"],
     }
     manifest_json = _json_bytes(manifest)
@@ -102,6 +103,8 @@ def _summary_markdown(sanitized: dict[str, Any]) -> str:
         f"- Events: {incident['event_count']}\n"
         f"- Window duration: {incident['window_duration_seconds']} seconds\n"
         f"- Target event: {incident['target_event_id']}\n"
+        "- Trace projection: "
+        f"{'included' if incident['trace_evidence'] else 'not included'}\n"
         f"- Sanitizer profile: {SANITIZER_PROFILE} v{SANITIZER_VERSION}\n\n"
         "## Sanitization\n\n"
         f"- Absolute timestamps: {policy['absolute_timestamps']}\n"
@@ -109,7 +112,8 @@ def _summary_markdown(sanitized: dict[str, Any]) -> str:
         f"- Context IDs: {policy['context_ids']}\n"
         f"- User IDs: {policy['user_ids']}\n"
         f"- Free text: {policy['free_text']}\n"
-        f"- State values: {policy['state_values']}\n\n"
+        f"- State values: {policy['state_values']}\n"
+        f"- Trace references: {policy['trace_references']}\n\n"
         "This bundle contains normalized forensic evidence only. "
         "It does not contain raw Home Assistant event payloads.\n"
     )

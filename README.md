@@ -56,6 +56,7 @@ Implemented in the development stack:
 - admin-only searchable timeline
 - deterministic context-based **Explain this change**
 - live automation/script trace enrichment with a privacy-reduced structural projection
+- optional freezing of that validated safe trace projection into saved incidents and sanitized exports
 - **Save incident** directly from a state-change event
 - durable saved incidents in a separate private store
 - saved-incident list and management in the sidebar
@@ -68,7 +69,6 @@ Safe export preserves diagnostic structure but pseudonymizes identifiers, remove
 
 Still intentionally missing from v0.1:
 
-- persistence/export of the safe trace projection
 - timing-only correlated evidence
 - anomaly detection
 - AI root-cause summaries
@@ -98,7 +98,9 @@ Persistent rolling snapshots and saved incidents use Home Assistant private stor
 
 The current UI HTML-escapes values returned from Home Assistant before rendering them.
 
-Full Home Assistant traces are queried live through the admin-only trace WebSocket API and immediately reduced to structural paths/outcomes in panel memory. Config, blueprint inputs, variables, error text and arbitrary result payloads are not persisted by HA Forensic Lab. See [`docs/trace-enrichment.md`](docs/trace-enrichment.md).
+Full Home Assistant traces are queried live through the admin-only trace WebSocket API and immediately reduced to structural paths/outcomes in panel memory. Config, blueprint inputs, variables, error text and arbitrary result payloads are never stored.
+
+When the user saves the currently explained event, the backend can freeze only that reduced projection after validating it again against a strict allowlist. Sanitized exports pseudonymize its automation/script, run and context identifiers. See [`docs/trace-enrichment.md`](docs/trace-enrichment.md).
 
 Sanitized incident export is safe-only in v0.1. The sanitizer is a separate tested module and export ZIPs include a SHA-256 digest.
 
