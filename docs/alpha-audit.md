@@ -21,9 +21,9 @@ fixes separately. Do not squash/rebase the consolidation or delete stack branche
 before verifying ancestry on main. Earlier PR discussions remain available.
 
 The separate `hardening/release-prep` branch is not an open PR and is not in the
-feature chain. Its alternate release documentation was superseded by #19/#20;
-merging it would remove the deterministic packaging/release work and versioned
-diagnostics. It was left untouched.
+feature chain. It adds alternate release-process/contribution documentation
+and review templates but no runtime implementation. The candidate uses #19/#20
+for packaging and release instructions; this separate branch was left untouched.
 
 ## Code and packaging audit
 
