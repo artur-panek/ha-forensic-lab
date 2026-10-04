@@ -6,6 +6,8 @@
 
 <p align="center"><strong>Runtime forensics and incident analysis for Home Assistant.</strong></p>
 
+By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/ha-forensic-lab/)
+
 HA Forensic Lab is an experimental Home Assistant custom integration for reconstructing **what happened, in what order, and why**.
 
 The project is deliberately evidence-first: it should record facts before interpreting them, and it must never present a timing correlation as proven causation.
@@ -124,6 +126,21 @@ pseudonymize automation/script, run, context and entity identifiers.
 
 Sanitized incident export is safe-only in v0.1. The sanitizer is separately
 tested and export ZIPs include a SHA-256 digest.
+
+## Installation / testing
+
+This repository is **pre-alpha** and does not have a numbered public release yet. It is useful for development and architecture testing, not as a production forensic recorder.
+
+For a manual test install:
+
+1. Copy `custom_components/ha_forensic_lab/` into your Home Assistant configuration directory under `custom_components/`.
+2. Restart Home Assistant.
+3. Open **Settings → Devices & services → Add integration → HA Forensic Lab**.
+4. Confirm setup. The current build registers the admin-only placeholder panel.
+
+HACS repository metadata is already present so the project follows the expected custom-integration layout, but normal user installation will be documented around the first useful recording release.
+
+For the technical design, see [architecture](docs/architecture.md), the [v0.1 scope](docs/v0.1-scope.md) and the [roadmap](docs/roadmap.md).
 
 ## Development
 
