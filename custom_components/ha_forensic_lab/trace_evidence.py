@@ -10,7 +10,17 @@ from typing import Any
 TRACE_DOMAINS = frozenset({"automation", "script"})
 MAX_TRACE_EVIDENCE_STEPS = 200
 
-_SAFE_PATH = re.compile(r"^[A-Za-z0-9_/-]{1,180}$")
+# Structural vocabulary only; a character allowlist also accepts secret text.
+_PATH_PARTS = frozenset({
+    "action", "sequence", "trigger", "condition", "conditions", "choose",
+    "default", "if", "then", "else", "repeat", "while", "until", "parallel",
+})
+TRACE_STATES = frozenset({"running", "stopped"})
+TRACE_EXECUTIONS = frozenset({
+    "finished", "cancelled", "aborted", "error", "failed_single",
+    "failed_max_runs", "disallowed_recursion_detected",
+})
+TRACE_CHOICES = frozenset({"then", "else", "default"})
 _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:-]{1,160}$")
 
 
@@ -71,10 +81,11 @@ def normalize_trace_evidence(raw: object) -> TraceEvidence | None:
 
     return TraceEvidence(
         reference=reference,
-        state=_optional_token(raw.get("state"), "state"),
-        script_execution=_optional_token(
+        state=_optional_enum(raw.get("state"), "state", TRACE_STATES),
+        script_execution=_optional_enum(
             raw.get("script_execution"),
             "script_execution",
+            TRACE_EXECUTIONS,
         ),
         last_step=_optional_path(raw.get("last_step"), "last_step"),
         steps=steps,
@@ -112,7 +123,7 @@ def _step(raw: object) -> TraceStepEvidence:
         path=_required_path(raw.get("path"), "path"),
         child=child,
         result=result,
-        choice=_optional_token(raw.get("choice"), "choice"),
+        choice=_choice(raw.get("choice")),
     )
 
 
@@ -177,7 +188,14 @@ def _optional_token(value: object, field: str) -> str | None:
 
 
 def _required_path(value: object, field: str) -> str:
-    if not isinstance(value, str) or not _SAFE_PATH.fullmatch(value):
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 180
+        or any(
+            part not in _PATH_PARTS and not re.fullmatch(r"[0-9]{1,6}", part)
+            for part in value.split("/")
+        )
+    ):
         raise ValueError(f"trace_evidence.{field} is not a safe path")
     return value
 
@@ -186,3 +204,20 @@ def _optional_path(value: object, field: str) -> str | None:
     if value is None:
         return None
     return _required_path(value, field)
+
+
+def _optional_enum(value: object, field: str, allowed: frozenset[str]) -> str | None:
+    if value is None:
+        return None
+    if not isinstance(value, str) or value not in allowed:
+        raise ValueError(f"trace_evidence.{field} is not an allowed structural value")
+    return value
+
+
+def _choice(value: object) -> str | None:
+    # HA choose actions report integer branch indexes, unlike if/else actions.
+    if type(value) is int and 0 <= value <= 999999:
+        return str(value)
+    if isinstance(value, str) and re.fullmatch(r"[0-9]{1,6}", value):
+        return value
+    return _optional_enum(value, "choice", TRACE_CHOICES)

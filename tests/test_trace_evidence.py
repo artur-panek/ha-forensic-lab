@@ -122,3 +122,25 @@ def test_normalization_rejects_more_than_step_limit() -> None:
 
 def test_none_means_incident_without_trace_evidence() -> None:
     assert trace_evidence.normalize_trace_evidence(None) is None
+
+
+def test_structural_fields_reject_secret_tokens() -> None:
+    import pytest
+
+    for field in ("state", "script_execution", "last_step"):
+        raw = _raw_projection()
+        raw[field] = "SECRET_TOKEN_123"
+        with pytest.raises(ValueError):
+            trace_evidence.normalize_trace_evidence(raw)
+    for field in ("path", "choice"):
+        raw = _raw_projection()
+        raw["steps"][0][field] = "SECRET_TOKEN_123"
+        with pytest.raises(ValueError):
+            trace_evidence.normalize_trace_evidence(raw)
+
+
+def test_numeric_choose_branch_is_preserved() -> None:
+    raw = _raw_projection()
+    raw["steps"][1]["choice"] = 0
+    evidence = trace_evidence.normalize_trace_evidence(raw)
+    assert evidence.steps[1].choice == "0"

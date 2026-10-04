@@ -1,6 +1,14 @@
 const TRACE_DOMAINS = new Set(["automation", "script"]);
-const SAFE_PATH = /^[A-Za-z0-9_/-]{1,180}$/;
-const SAFE_TOKEN = /^[A-Za-z0-9_.:-]{1,96}$/;
+const PATH_PARTS = new Set([
+  "action", "sequence", "trigger", "condition", "conditions", "choose",
+  "default", "if", "then", "else", "repeat", "while", "until", "parallel",
+]);
+const TRACE_STATES = new Set(["running", "stopped"]);
+const TRACE_EXECUTIONS = new Set([
+  "finished", "cancelled", "aborted", "error", "failed_single",
+  "failed_max_runs", "disallowed_recursion_detected",
+]);
+const TRACE_CHOICES = new Set(["then", "else", "default"]);
 const MAX_PROJECTED_STEPS = 200;
 
 export function resolveTraceReference(events, targetEventId, contextMap) {
@@ -98,7 +106,7 @@ export function projectTrace(rawTrace, reference) {
           projected.result = element.result.result;
         }
 
-        const choice = safeToken(element.result.choice);
+        const choice = safeChoice(element.result.choice);
         if (choice) {
           projected.choice = choice;
         }
@@ -119,8 +127,8 @@ export function projectTrace(rawTrace, reference) {
       item_id: reference.item_id,
       run_id: reference.run_id,
     },
-    state: safeToken(trace.state),
-    script_execution: safeToken(trace.script_execution),
+    state: safeEnum(trace.state, TRACE_STATES),
+    script_execution: safeEnum(trace.script_execution, TRACE_EXECUTIONS),
     last_step: safePath(trace.last_step),
     steps,
     truncated,
@@ -150,15 +158,23 @@ function projectChild(value) {
 }
 
 function safePath(value) {
-  if (typeof value !== "string" || !SAFE_PATH.test(value)) {
+  if (typeof value !== "string" || !value.length || value.length > 180 ||
+    !value.split("/").every((part) => PATH_PARTS.has(part) || /^[0-9]{1,6}$/.test(part))) {
     return null;
   }
   return value;
 }
 
-function safeToken(value) {
-  if (typeof value !== "string" || !SAFE_TOKEN.test(value)) {
-    return null;
+function safeEnum(value, allowed) {
+  return typeof value === "string" && allowed.has(value) ? value : null;
+}
+
+function safeChoice(value) {
+  if (Number.isInteger(value) && value >= 0 && value <= 999999) {
+    return String(value);
   }
-  return value;
+  if (typeof value === "string" && /^[0-9]{1,6}$/.test(value)) {
+    return value;
+  }
+  return safeEnum(value, TRACE_CHOICES);
 }

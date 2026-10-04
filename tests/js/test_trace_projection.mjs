@@ -161,3 +161,19 @@ const contexts = {
 }
 
 console.log("trace projection tests passed");
+
+{
+  const projected = projectTrace({
+    state: "SECRET_TOKEN_123",
+    script_execution: "SECRET_TOKEN_123",
+    last_step: "action/SECRET_TOKEN_123",
+    trace: {
+      "action/0": [{ path: "action/0", result: { choice: "SECRET_TOKEN_123" } }],
+      "action/1": [{ path: "action/1", result: { choice: 0 } }],
+      "SECRET_TOKEN_123": [{ path: "SECRET_TOKEN_123" }],
+    },
+  }, { context_id: "ctx-root", domain: "automation", item_id: "test", run_id: "run" });
+  assert.equal(JSON.stringify(projected).includes("SECRET_TOKEN_123"), false);
+  assert.equal(projected.steps.length, 2);
+  assert.equal(projected.steps[1].choice, "0");
+}
