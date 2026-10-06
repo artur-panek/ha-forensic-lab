@@ -7,7 +7,7 @@
 A Home Assistant custom integration for inspecting the events and context links
 around an entity change.
 
-By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/ha-forensic-lab/)
+By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/ha-forensic-lab/) · [Static vs runtime note](https://artur.panek.tech/notes/home-assistant-static-vs-runtime/)
 
 > [!IMPORTANT]
 > **0.1.0-alpha.1 is an unreleased candidate.** The real Home Assistant
