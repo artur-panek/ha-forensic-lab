@@ -1,18 +1,17 @@
-<p align="center">
-  <img src="assets/brand/ha-forensic-lab-mark.svg" width="180" alt="HA Forensic Lab logo">
-</p>
+<img src="assets/brand/ha-forensic-lab-mark.svg" width="72" alt="HA Forensic Lab logo">
 
-<h1 align="center">HA Forensic Lab</h1>
+# HA Forensic Lab
 
-A Home Assistant custom integration for inspecting the events and context links
-around an entity change.
+**Runtime forensics and incident reconstruction for Home Assistant.**
 
-By [Artur Panek](https://artur.panek.tech/) · [Project page](https://artur.panek.tech/work/ha-forensic-lab/) · [Static vs runtime note](https://artur.panek.tech/notes/home-assistant-static-vs-runtime/)
+[![CI](https://img.shields.io/github/actions/workflow/status/artur-panek/ha-forensic-lab/validate.yml?branch=main&style=flat-square&label=CI)](https://github.com/artur-panek/ha-forensic-lab/actions/workflows/validate.yml) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
+
+Inspect captured state changes, service calls, automation and script context links, and saved incidents without turning incomplete evidence into invented causality.
+
+[Project page](https://artur.panek.tech/work/ha-forensic-lab/) · [Engineering note](https://artur.panek.tech/notes/home-assistant-static-vs-runtime/)
 
 > [!IMPORTANT]
-> **0.1.0-alpha.1 is an unreleased candidate.** The real Home Assistant
-> [release checklist](docs/alpha-release-checklist.md) has not been completed.
-> A green CI run is not approval to tag a release.
+> **0.1.0-alpha.1 is an unreleased candidate.** The Home Assistant [release checklist](docs/alpha-release-checklist.md) has not been completed. A green CI run is not approval to tag a release.
 
 ## Install for testing
 
