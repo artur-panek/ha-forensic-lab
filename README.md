@@ -2,11 +2,11 @@
 
 # HA Forensic Lab
 
-**Runtime forensics and incident reconstruction for Home Assistant.**
+**Inspect Home Assistant events recorded around an unexpected change.**
 
 [![CI](https://img.shields.io/github/actions/workflow/status/artur-panek/ha-forensic-lab/validate.yml?branch=main&style=flat-square&label=CI)](https://github.com/artur-panek/ha-forensic-lab/actions/workflows/validate.yml) [![License](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
 
-Inspect captured state changes, service calls, automation and script context links, and saved incidents without turning incomplete evidence into invented causality.
+Browse recorded state changes and service calls, follow available automation and script context links, and save the relevant events as an incident. Missing events or links are shown as gaps, not guessed causes.
 
 [Project page](https://artur.panek.tech/work/ha-forensic-lab/) · [Engineering note](https://artur.panek.tech/notes/home-assistant-static-vs-runtime/)
 
