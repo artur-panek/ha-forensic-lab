@@ -84,6 +84,23 @@ jobs:
       - name: Check schemas and storage against Home Assistant
         run: python -m pytest -q tests/ha_runtime
 
+  ha_current:
+    name: Current HA 2026.10.1 compatibility (advisory)
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version-file: ".python-version"
+      - name: Install current stable Home Assistant
+        run: python -m pip install homeassistant==2026.10.1 pytest
+      - name: Check schemas and storage against current HA
+        run: python -m pytest -q tests/ha_runtime
+
   lint:
     name: Code checks
     if: github.event_name != 'schedule'
