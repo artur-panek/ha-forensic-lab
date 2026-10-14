@@ -67,7 +67,7 @@ installation or lifecycle checks passed merely because CI is green.
 Custom-repository installation does not mean the project is in HACS's default
 catalogue. Submission requires a release after validation, HACS validation without
 ignored checks, repository topics, and an accepted PR to `hacs/default`.
-The existing `topics` exception is tracked in [HACS readiness](hacs-readiness.md).
+HACS validation checks repository topics as well; see [HACS readiness](hacs-readiness.md).
 
 ## Manual release ZIP
 
