@@ -27,17 +27,14 @@ exact-SHA real-instance matrix remains incomplete.
 Before submitting to `hacs/default`:
 
 1. Complete the real-instance checklist and publish the approved alpha release.
-2. Set GitHub repository topics (About → settings), for example:
-   `home-assistant`, `hacs`, `custom-integration`, `forensics`, `automation`.
-3. Remove the remaining `ignore: "topics"` from Validate and Release workflows
-   and obtain green HACS validation without ignored checks.
+2. Keep repository topics (`home-assistant`, `hacs`, `custom-integration`,
+   `forensics`, `automation`) set and verify them through HACS validation.
+3. Require green HACS checks without exceptions in both Validate and Release workflows.
 4. Confirm description, issues, release, integration manifest and local brand
    asset requirements, then submit the repository to the alphabetical
    `integration` list in `hacs/default`.
 
-The workflows currently ignore the missing repository topics check. This does
-not prevent custom-repository installation; remove the exception before a
-default-catalogue submission.
+Repository topics are set. Both workflows now run HACS validation without topic exceptions.
 
 ## Candidate identity
 
