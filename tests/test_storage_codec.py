@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from tests.support import load_module
 
 models = load_module("models")
@@ -56,3 +58,13 @@ def test_deserializer_skips_malformed_entries() -> None:
 def test_deserializer_rejects_non_event_container() -> None:
     assert codec.deserialize_events(None) == ()
     assert codec.deserialize_events({"events": "not-a-list"}) == ()
+
+
+@pytest.mark.parametrize("timestamp", [float("nan"), float("inf"), float("-inf")])
+def test_deserializer_skips_non_finite_timestamps(timestamp: float) -> None:
+    valid = codec.serialize_events((_event("valid"),))["events"][0]
+    malformed = {**valid, "event_id": "invalid", "timestamp": timestamp}
+
+    restored = codec.deserialize_events({"events": [malformed, valid]})
+
+    assert [event.event_id for event in restored] == ["valid"]
