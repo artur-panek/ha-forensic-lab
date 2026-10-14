@@ -17,10 +17,12 @@ The install/restart/config-entry/panel instructions are in
 [installation.md](installation.md). Custom-repository installability is not a
 claim that the real Home Assistant release checklist has passed.
 
-The compatibility job installs HA 2026.9.4 and checks options/WebSocket schemas,
-incident writes (including disk failures) and the final-write shutdown hook.
-It uses temporary test storage and does not boot a full installation. The
-exact-SHA real-instance matrix remains incomplete.
+The release-baseline compatibility job installs HA 2026.9.4 and checks
+options/WebSocket schemas, incident writes (including disk failures) and the
+final-write shutdown hook. A separate advisory lane checks current stable Core
+2026.10.1 on pull requests, weekly schedules and manual runs. Both use temporary
+test storage; neither boots a full installation or replaces exact-SHA testing
+on a real Home Assistant instance.
 
 ## Default catalogue: not submitted
 
