@@ -67,7 +67,6 @@ jobs:
         uses: hacs/action@main
         with:
           category: integration
-          ignore: "topics"
 
   ha_compat:
     name: HA 2026.9.4 compatibility
