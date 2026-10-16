@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from math import isfinite
 from typing import Any
 
 from .models import ForensicEvent, ForensicEventKind
@@ -42,6 +43,8 @@ def _event_from_dict(raw: object) -> ForensicEvent:
     event_id = _required_string(raw, "event_id")
     kind = ForensicEventKind(_required_string(raw, "kind"))
     timestamp = float(raw["timestamp"])
+    if not isfinite(timestamp):
+        raise ValueError("stored event timestamp must be finite")
 
     target_entity_ids = raw.get("target_entity_ids", [])
     if not isinstance(target_entity_ids, list) or not all(
