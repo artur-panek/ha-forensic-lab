@@ -2,19 +2,78 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags:
       - "v*"
+    paths:
+      - "custom_components/ha_forensic_lab/manifest.json"
+      - ".github/workflows/release.yml"
+      - "docs/releases/**"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: ha-forensic-lab-release
+  cancel-in-progress: false
 
 jobs:
+  prepare:
+    name: Check release version
+    if: github.repository == 'artur-panek/ha-forensic-lab'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - name: Check out release source
+        uses: actions/checkout@v7
+
+      - name: Check version and existing releases
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$(python -c 'import json; print("v" + json.load(open("custom_components/ha_forensic_lab/manifest.json"))["version"])')"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]
+          if [[ "$GITHUB_REF_TYPE" == tag && "$GITHUB_REF_NAME" != "$tag" ]]; then
+            echo "Tag does not match the integration manifest" >&2
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_TYPE" != tag && "$GITHUB_REF" != refs/heads/main ]]; then
+            echo "Publish from main or the matching version tag" >&2
+            exit 1
+          fi
+          test -f "docs/releases/$tag.md"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          gh api "repos/$GITHUB_REPOSITORY/releases" --paginate --slurp > releases.json
+          existing="$(jq -c --arg tag "$tag" '[.[][] | select(.tag_name == $tag)]' releases.json)"
+          if [[ "$(jq length <<< "$existing")" != 0 ]]; then
+            if [[ "$(jq 'any(.[]; .draft)' <<< "$existing")" == true ]]; then
+              echo "A draft already exists for $tag; inspect it before retrying" >&2
+              exit 1
+            fi
+            echo "$tag is already published; leaving it unchanged"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
   release:
     name: Validate, package and publish
+    needs: prepare
+    if: needs.prepare.outputs.publish == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
 
     steps:
-      - name: Check out tagged source
+      - name: Check out release source
         uses: actions/checkout@v7
 
       - name: Set up Python
@@ -56,16 +115,45 @@ jobs:
           python -m pytest -q tests/ha_runtime
 
       - name: Build deterministic release archive
-        run: |
-          python scripts/build_release.py \
-            --tag "${GITHUB_REF_NAME}" \
-            --output dist
+        run: python scripts/build_release.py --tag "$RELEASE_TAG" --output dist
 
-      - name: Publish GitHub release
+      - name: Check publication target
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF" == refs/heads/main ]]; then
+            current="$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+            [[ "$current" == "$GITHUB_SHA" ]] || { echo "main advanced; publish the reviewed head instead" >&2; exit 1; }
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/$RELEASE_TAG" > refs.json
+          jq -e --arg ref "refs/tags/$RELEASE_TAG" --arg sha "$GITHUB_SHA" \
+            'all(.[]; .ref != $ref or (.object.type == "commit" and .object.sha == $sha))' refs.json
+
+      - name: Upload draft release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: HA Forensic Lab ${{ needs.prepare.outputs.tag }}
+          body_path: docs/releases/${{ needs.prepare.outputs.tag }}.md
           files: |
             dist/ha-forensic-lab.zip
             dist/ha-forensic-lab.zip.sha256
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          fail_on_unmatched_files: true
+          draft: true
+          prerelease: ${{ contains(needs.prepare.outputs.tag, '-') }}
+
+      - name: Verify uploaded files and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'ha-forensic-lab.zip*' --dir dist/uploaded
+          cmp dist/ha-forensic-lab.zip dist/uploaded/ha-forensic-lab.zip
+          cmp dist/ha-forensic-lab.zip.sha256 dist/uploaded/ha-forensic-lab.zip.sha256
+          (cd dist/uploaded && sha256sum --check ha-forensic-lab.zip.sha256)
+          gh release edit "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft=false

@@ -1,106 +1,84 @@
 # Release process
 
-HA Forensic Lab releases are intentionally gated. A green repository CI run is
-necessary but is not sufficient evidence for publishing an alpha.
+Testing prereleases make a fixed build available through HACS. They are not a
+claim that real-instance validation is complete. The release notes must state
+which checks remain open, and the maintainer must explicitly approve publication.
+A green workflow on its own is not that approval.
 
 ## Version contract
 
-The release version lives in:
+The version lives in `custom_components/ha_forensic_lab/manifest.json`. Its tag
+must be exactly `v<VERSION>`, for example `v0.1.0-alpha.1`.
 
-~~~text
-custom_components/ha_forensic_lab/manifest.json
-~~~
+`scripts/build_release.py` rejects a mismatched tag, a missing changelog section
+or missing runtime files. Release notes belong in `docs/releases/v<VERSION>.md`.
 
-A release tag must be exactly:
+## Prepare a testing release
 
-~~~text
-v<VERSION>
-~~~
+1. Merge and review the intended runtime fixes.
+2. Run the repository and Home Assistant compatibility checks.
+3. Set the manifest version, date the matching changelog entry, and write release
+   notes with HACS instructions and any outstanding real-instance checks.
+4. Review the release-preparation PR and its CI results.
+5. Merge it to `main` when publication is intended.
 
-For example:
+For the first testing prerelease, the maintainer has requested HACS distribution
+so the real-instance checklist can be completed using the tagged build. Its
+unchecked items remain unchecked; the README and release notes say they are open.
 
-~~~text
-manifest version: 0.1.0-alpha.1
-tag:              v0.1.0-alpha.1
-~~~
+## Publication
 
-`scripts/build_release.py` fails when the tag and manifest version disagree or
-when `CHANGELOG.md` has no matching version section.
+Release runs when a change to the manifest, release workflow or versioned release
+notes reaches `main`. It also accepts a matching lightweight version tag or a
+manual workflow run on `main`. No new version is published just because an
+ordinary runtime fix is merged.
 
-## Before tagging
+The workflow leaves an existing published version untouched. An existing draft
+requires inspection rather than silently replacing its assets. It also rejects
+a mismatched tag, a conflicting tag target and a main-branch build whose head
+has advanced before publication.
 
-1. Select the candidate commit after merging the intended fixes.
-2. Run the full repository validation suite on the resulting default branch.
-3. Install that exact commit on a real Home Assistant instance.
-4. Complete every blocking item in
-   [alpha-release-checklist.md](alpha-release-checklist.md).
-5. Record real-instance observations using the alpha test matrix.
-6. Review [known-limitations.md](known-limitations.md).
-7. Confirm the changelog accurately describes the candidate.
-8. Confirm `manifest.json` contains the version you intend to tag.
+For a new version, the workflow reruns:
 
-Do **not** tag a release merely because CI is green.
+- Ruff, Python compilation and repository tests;
+- frontend syntax and regression tests;
+- HA 2026.9.4 helper compatibility tests;
+- hassfest and HACS validation;
+- deterministic packaging and the version contract check.
+
+It creates a draft with the exact tested commit as its target, uploads
+`ha-forensic-lab.zip` and `ha-forensic-lab.zip.sha256`, downloads them again and
+compares both files with the local build. Only then is the draft published.
+Publication uses the workflow's short-lived GitHub token, not a personal token.
+
+Versions containing `-` remain GitHub prereleases. In HACS, enable **Show beta
+versions** and select the tagged version. Existing `main` installations may
+need **Redownload** rather than an automatic update prompt.
 
 ## Local packaging check
 
 ~~~bash
-python scripts/build_release.py --output dist
+python scripts/build_release.py --tag v0.1.0-alpha.1 --output dist
+(cd dist && sha256sum --check ha-forensic-lab.zip.sha256)
 ~~~
 
-For an exact tag contract check:
+The generated manual-install ZIP is deterministic for the same runtime files.
+Documentation and workflow changes do not alter that ZIP.
 
-~~~bash
-python scripts/build_release.py \
-  --tag v0.1.0-alpha.1 \
-  --output dist
-~~~
+## Failed publication
 
-The generated manual-install ZIP is deterministic for the same source tree.
+Inspect the failing job and any draft before retrying. Do not move a published
+tag or overwrite published assets to hide a failed check. After publication,
+fixes require a new version, for example `0.1.0-alpha.1` to `0.1.0-alpha.2`.
 
-## Publishing
+## Real-instance and stable-release gates
 
-After the real-instance gate has passed, create and push the exact version tag:
+Complete [alpha-release-checklist.md](alpha-release-checklist.md) on an exact
+release or candidate before calling the build alpha-ready. Record installation,
+reload/restart, saved-incident review, exclusions, export and observed recorder
+cost using [alpha-testing.md](alpha-testing.md). Never mark an item passed based
+only on CI.
 
-~~~bash
-git tag v0.1.0-alpha.1
-git push origin v0.1.0-alpha.1
-~~~
-
-The Release workflow then re-runs:
-
-- Ruff
-- Python compilation
-- pytest
-- frontend JavaScript checks
-- frontend regression tests
-- HA 2026.9.4 schema, storage and final-write compatibility tests
-- hassfest
-- HACS validation
-- release contract validation
-
-Only after those checks succeed does it publish the GitHub release and attach:
-
-- `ha-forensic-lab.zip`
-- `ha-forensic-lab.zip.sha256`
-
-Tags containing `-` are published as GitHub pre-releases.
-
-## Failed release workflow
-
-Do not move or reuse a published tag to hide a failed release.
-
-Fix the problem, bump the pre-release version, update the changelog, and create
-a new tag.
-
-Example:
-
-~~~text
-0.1.0-alpha.1 → 0.1.0-alpha.2
-~~~
-
-## Stable release
-
-The alpha process does not imply that `0.1.0` is ready.
-
-Remove the pre-release suffix only after the known alpha gates and compatibility
-expectations have been revisited explicitly.
+Remove the prerelease suffix only after the real-instance gates and supported
+Home Assistant versions have been reviewed explicitly. This first HACS testing
+release does not make `0.1.0` stable.

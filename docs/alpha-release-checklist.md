@@ -1,9 +1,11 @@
 # Alpha release checklist
 
-This checklist is the gate for the first public testing build.
+This checklist records real-instance readiness. A testing prerelease may be
+published through HACS to run these checks, provided its release notes clearly
+state which items remain open. Publication does not mark any item passed.
 
-Use a copy of this checklist for each exact candidate SHA. A checked box means
-the behavior has been verified and recorded in the test report.
+Use a copy of this checklist for each exact candidate SHA or release tag. A
+checked box means the behavior has been verified and recorded in the test report.
 
 ## Repository and packaging
 
@@ -14,14 +16,14 @@ the behavior has been verified and recorded in the test report.
 - [ ] repository description/homepage/topics are final
 - [ ] MIT license is present and detected
 - [ ] local brand icon renders correctly in HACS
-- [ ] README accurately labels the release as an unreleased alpha candidate
+- [ ] README accurately labels the build as an experimental testing prerelease
 - [ ] manifest version matches the intended release tag
 - [ ] CHANGELOG has a matching version section
 - [ ] deterministic manual-install ZIP builds successfully
 - [ ] ZIP checksum is generated and verified
-- [ ] real-instance testing uses an exact-SHA CI candidate artifact
-- [ ] tested candidate commit SHA is recorded in the alpha test report
-- [ ] release workflow has been reviewed before the first tag is pushed
+- [ ] real-instance testing uses a fixed release tag or exact-SHA CI artifact
+- [ ] tested commit SHA and release tag, when applicable, are recorded in the test report
+- [ ] release workflow has been reviewed before publication
 
 ## Home Assistant lifecycle
 
@@ -78,13 +80,11 @@ the behavior has been verified and recorded in the test report.
 - [ ] installation docs clearly mark the build as experimental
 - [ ] release remains a GitHub pre-release
 
-## Release decision
+## Readiness decision
 
 Do not call the build alpha-ready until the real-instance checks above have been
 performed.
 
 CI covers code checks, unit regressions, HA helper compatibility and packaging.
 The full installation and lifecycle checks still require a real test instance.
-
-Only after this checklist passes should the exact manifest version tag described
-in [releasing.md](releasing.md) be pushed.
+Testing-prerelease publication is described in [releasing.md](releasing.md).

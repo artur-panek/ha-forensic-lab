@@ -11,23 +11,25 @@ Browse recorded state changes and service calls, follow available automation and
 [Project page](https://artur.panek.tech/work/ha-forensic-lab/) · [Engineering note](https://artur.panek.tech/notes/home-assistant-static-vs-runtime/)
 
 > [!IMPORTANT]
-> **0.1.0-alpha.1 is an unreleased candidate.** The Home Assistant [release checklist](docs/alpha-release-checklist.md) has not been completed. A green CI run is not approval to tag a release.
+> **Experimental alpha for real-instance testing.** Install the tagged [v0.1.0-alpha.1 release](https://github.com/artur-panek/ha-forensic-lab/releases/tag/v0.1.0-alpha.1) through HACS. The Home Assistant [validation checklist](docs/alpha-release-checklist.md) remains open; publishing a testing prerelease does not mean those checks have passed.
 
 ## Install for testing
 
 Requires Home Assistant **2026.9.4 or newer** and an administrator account.
 The repository is available as a HACS custom repository, outside the default
-catalogue.
+catalogue. Take a Home Assistant backup before installing.
 
 [![Open in HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=artur-panek&repository=ha-forensic-lab&category=integration)
 
-1. Add `artur-panek/ha-forensic-lab` in HACS with type **Integration**.
-2. Download `main` and restart Home Assistant.
-3. Add **HA Forensic Lab** in **Settings → Devices & services**.
-4. Open **HA Forensic Lab** in the sidebar.
+1. Add `artur-panek/ha-forensic-lab` in HACS with type **Integration**, unless already added.
+2. Open HA Forensic Lab in HACS and enable **Show beta versions** in its menu.
+3. Download **v0.1.0-alpha.1** and restart Home Assistant. Existing `main` installs can use **Redownload** to select the tagged version.
+4. Add **HA Forensic Lab** in **Settings → Devices & services**, unless already configured.
+5. Open **HA Forensic Lab** in the sidebar.
 
-See [installation](docs/installation.md) for manual ZIP installation. Release
-testing must use an exact-SHA CI artifact; `main` changes as fixes are merged.
+See [installation](docs/installation.md) for manual ZIP installation. Record the
+release tag when reporting test results. Unreleased fixes can still be tested
+with an exact-SHA CI artifact; `main` changes as fixes are merged.
 
 ## Investigate a change
 
