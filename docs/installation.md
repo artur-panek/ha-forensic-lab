@@ -1,18 +1,17 @@
 # Installation
 
-HA Forensic Lab is currently an alpha candidate. It is not yet listed in the
+HA Forensic Lab is experimental alpha software. It is not yet listed in the
 default HACS repository catalogue.
 
-Do not install it on a Home Assistant instance where an experimental custom
-integration is unacceptable.
+Take a Home Assistant backup before installing. Do not install it on an instance
+where an experimental custom integration is unacceptable.
 
 ## HACS custom repository
 
-### Test the unreleased candidate now
+### Install the testing release
 
 Minimum Home Assistant version: **2026.9.4**. Use an administrator account.
-This is an experimental development install, with real-instance validation still
-pending. A GitHub release is not required for a HACS custom repository.
+Real-instance validation is still pending.
 
 [Open HA Forensic Lab in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=artur-panek&repository=ha-forensic-lab&category=integration)
 
@@ -27,31 +26,31 @@ If the button does not add/open the repository, follow these steps:
    ~~~
 
 4. Select **Integration** as the repository type.
-5. Find **HA Forensic Lab**, choose **Download**, and install `main` (the default branch).
-6. Restart Home Assistant when HACS requests it.
+5. Open **HA Forensic Lab**, enable **Show beta versions**, and download
+   **v0.1.0-alpha.2** (or a newer published testing release).
+6. Restart Home Assistant.
 7. Open **Settings → Devices & services → Add integration**.
 8. Search for **HA Forensic Lab** and add the single instance.
+9. Open **HA Forensic Lab** in the sidebar. Use **Configure** on the integration
+   to change capture options.
 
-9. Open **HA Forensic Lab** in the sidebar. The timeline and Recorder health
-   should appear; use **Configure** on the integration to change capture options.
+HACS downloads the integration directory from the selected Git ref. There is no
+need to download the attached release ZIP separately for a HACS installation.
 
-HACS downloads the integration directory from the selected Git ref. The repository
-intentionally does not enable `zip_release` or hide the default branch, so a
-missing public release does not prevent this development installation.
+### Existing HACS installations
 
-### After the alpha release is published
+Open the existing repository entry, enable **Show beta versions**, and select
+**v0.1.0-alpha.2** when updating. A `main` installation may need **Redownload**
+to select the tagged version. Restart Home Assistant and refresh the browser tab.
+Do not add another integration entry or remove the existing one.
 
-Enable **Show beta versions** in the repository's HACS menu if needed, then select
-`v0.1.0-alpha.1` (or the newer published prerelease) when downloading/updating.
-A plain Git tag is not enough for a release entry in HACS; the GitHub Release
-workflow must publish successfully.
+### Exact-build testing
 
-### Exact candidate testing
-
-A `main` install is convenient, but the branch can advance. For the release gate,
+Record the release tag when reporting test results. To test an unreleased change,
 use the [exact-SHA CI candidate ZIP](alpha-testing.md#exact-candidate-build), verify
-the checksum, and record the candidate SHA in the report. Do not mark HACS
-installation or lifecycle checks passed merely because CI is green.
+the checksum, and record the candidate SHA. A `main` install is convenient for
+development, but the branch can advance. Do not mark installation or lifecycle
+checks passed merely because CI is green.
 
 ### If installation does not appear
 
@@ -71,7 +70,7 @@ HACS validation checks repository topics as well; see [HACS readiness](hacs-read
 
 ## Manual release ZIP
 
-Every tagged release is intended to publish:
+Every tagged release publishes:
 
 ~~~text
 ha-forensic-lab.zip

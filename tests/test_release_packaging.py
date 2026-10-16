@@ -17,7 +17,7 @@ def test_manifest_version_has_matching_changelog_section() -> None:
     expected_tag = builder.validate_release_contract(version, None)
 
     assert expected_tag == f"v{version}"
-    assert version == "0.1.0-alpha.1"
+    assert version == "0.1.0-alpha.2"
 
 
 def test_release_tag_must_match_manifest_version() -> None:
