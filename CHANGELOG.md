@@ -5,9 +5,10 @@ All notable changes to HA Forensic Lab are documented here.
 The project follows Semantic Versioning. Pre-release versions are expected to
 change while the public alpha is being validated.
 
-## [0.1.0-alpha.1] - Unreleased
+## [0.1.0-alpha.1] - 2026-10-16
 
-First alpha candidate.
+First experimental testing release, available through HACS with beta versions
+enabled. Real-instance installation, lifecycle and performance checks remain open.
 
 ### Added
 
@@ -54,6 +55,9 @@ First alpha candidate.
 - reject arbitrary token-shaped text in trace structural fields
 - preserve numeric Home Assistant choose-branch indexes, including branch zero
 - pseudonymize user-defined service names in safe incident exports
+- apply entity exclusions to direct script service calls and restored events
+- reject non-finite or overflowing stored timestamps and reversed incident windows
+  without losing valid neighboring records
 
 ### Repository cleanup
 
@@ -63,10 +67,13 @@ First alpha candidate.
 - share pure-test imports, normalized event types and event serialization
 - separate panel styles from rendering code
 - replace proposed features and storage guarantees with current behavior
+- publish reviewed versions from main after release checks, with versioned notes
+  and verified release assets; never overwrite an already published version
 
 ### Known alpha limitations
 
 See [docs/known-limitations.md](docs/known-limitations.md).
 
-This entry remains **Unreleased** until the real-instance alpha checklist has
-passed and the matching release tag is intentionally created.
+This is a testing prerelease, not a claim that the real-instance alpha checklist
+has passed. Record installation, restart, exclusion, export and performance
+results against the release tag.
