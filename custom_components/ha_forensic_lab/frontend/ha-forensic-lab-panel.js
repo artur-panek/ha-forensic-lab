@@ -46,6 +46,7 @@ class HAForensicLabPanel extends HTMLElement {
     this._deletingIncidentId = null;
     this._incidentNotice = null;
     this._reviewIncidentId = null;
+    this._incidentReviewRequestId = 0;
     this._incidentReview = null;
     this._incidentReviewLoading = false;
     this._incidentReviewError = null;
@@ -403,10 +404,11 @@ class HAForensicLabPanel extends HTMLElement {
 
 
   async _reviewIncident(incidentId) {
-    if (!this._hass || !incidentId || this._incidentReviewLoading) {
+    if (!this._hass || !incidentId) {
       return;
     }
 
+    const requestId = ++this._incidentReviewRequestId;
     this._reviewIncidentId = incidentId;
     this._incidentReview = null;
     this._incidentReviewError = null;
@@ -414,29 +416,39 @@ class HAForensicLabPanel extends HTMLElement {
     this._render();
 
     try {
-      this._incidentReview = await this._hass.callWS({
+      const review = await this._hass.callWS({
         type: "ha_forensic_lab/incidents/review",
         incident_id: incidentId,
         max_events: 100,
       });
+      if (requestId !== this._incidentReviewRequestId) {
+        return;
+      }
+      this._incidentReview = review;
     } catch (error) {
+      if (requestId !== this._incidentReviewRequestId) {
+        return;
+      }
       this._incidentReviewError =
         error && error.message
           ? String(error.message)
           : "Unable to review saved incident";
     } finally {
-      this._incidentReviewLoading = false;
-      this._render();
+      if (requestId === this._incidentReviewRequestId) {
+        this._incidentReviewLoading = false;
+        this._render();
 
-      const reviewPanel =
-        this.shadowRoot && this.shadowRoot.getElementById("saved-review-panel");
-      if (reviewPanel) {
-        reviewPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        const reviewPanel =
+          this.shadowRoot && this.shadowRoot.getElementById("saved-review-panel");
+        if (reviewPanel) {
+          reviewPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
       }
     }
   }
 
   _closeIncidentReview() {
+    this._incidentReviewRequestId += 1;
     this._reviewIncidentId = null;
     this._incidentReview = null;
     this._incidentReviewError = null;
@@ -501,9 +513,7 @@ class HAForensicLabPanel extends HTMLElement {
       });
       this._incidentNotice = "Saved incident deleted.";
       if (this._reviewIncidentId === incidentId) {
-        this._reviewIncidentId = null;
-        this._incidentReview = null;
-        this._incidentReviewError = null;
+        this._closeIncidentReview();
       }
       deleted = true;
     } catch (error) {
