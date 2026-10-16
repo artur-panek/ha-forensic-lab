@@ -111,6 +111,17 @@ class CapturePolicy:
         if event.kind is not ForensicEventKind.CALL_SERVICE:
             return CaptureDecision(event=event)
 
+        # Direct script calls name the entity in the service, not the target list.
+        if (
+            event.domain == "script"
+            and event.service is not None
+            and self._entity_is_explicitly_excluded(f"script.{event.service}")
+        ):
+            return CaptureDecision(
+                event=None,
+                drop_reason=CaptureDropReason.EXCLUDED_ENTITY,
+            )
+
         filtered_targets = tuple(
             entity_id
             for entity_id in event.target_entity_ids

@@ -30,7 +30,7 @@ def deserialize_events(data: object) -> tuple[ForensicEvent, ...]:
     for raw_event in raw_events:
         try:
             events.append(_event_from_dict(raw_event))
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, OverflowError):
             continue
 
     return tuple(events)

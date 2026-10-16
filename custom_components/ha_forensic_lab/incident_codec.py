@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
+from math import isfinite
 from typing import Any
 
 from .incidents import Incident
@@ -30,7 +31,7 @@ def deserialize_incidents(data: object) -> tuple[Incident, ...]:
     for raw_incident in raw_incidents:
         try:
             incidents.append(_incident_from_dict(raw_incident))
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, TypeError, ValueError, OverflowError):
             continue
 
     return tuple(incidents)
@@ -58,13 +59,21 @@ def _incident_from_dict(raw: object) -> Incident:
     if not any(event.event_id == target_event_id for event in events):
         raise ValueError("stored incident target event is missing")
 
+    created_at = float(raw["created_at"])
+    window_start = float(raw["window_start"])
+    window_end = float(raw["window_end"])
+    if not all(isfinite(value) for value in (created_at, window_start, window_end)):
+        raise ValueError("stored incident timestamps must be finite")
+    if window_start > window_end:
+        raise ValueError("stored incident window is reversed")
+
     return Incident(
         incident_id=_required_string(raw, "incident_id"),
         title=_required_string(raw, "title"),
-        created_at=float(raw["created_at"]),
+        created_at=created_at,
         target_event_id=target_event_id,
-        window_start=float(raw["window_start"]),
-        window_end=float(raw["window_end"]),
+        window_start=window_start,
+        window_end=window_end,
         events=events,
         trace_evidence=normalize_trace_evidence(raw.get("trace_evidence")),
     )
