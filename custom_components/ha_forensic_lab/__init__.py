@@ -68,9 +68,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if existing_capture := domain_data.pop(DATA_CAPTURE, None):
         existing_capture.stop()
+    if existing_incidents := domain_data.get(DATA_INCIDENT_STORE):
+        await existing_incidents.async_close()
+        domain_data.pop(DATA_INCIDENT_STORE, None)
     if existing_store := domain_data.pop(DATA_STORE, None):
         await existing_store.async_flush()
-    domain_data.pop(DATA_INCIDENT_STORE, None)
 
     options = entry.options
     max_events = int(
@@ -118,6 +120,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def flush_on_shutdown(_event: Event) -> None:
         capture.stop()
+        await incident_store.async_close()
         await store.async_flush()
 
     entry.async_on_unload(
@@ -144,9 +147,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if capture := domain_data.pop(DATA_CAPTURE, None):
         capture.stop()
+    if incident_store := domain_data.get(DATA_INCIDENT_STORE):
+        await incident_store.async_close()
+        domain_data.pop(DATA_INCIDENT_STORE, None)
     if store := domain_data.pop(DATA_STORE, None):
         await store.async_flush()
-    domain_data.pop(DATA_INCIDENT_STORE, None)
 
     if async_panel_exists(hass, PANEL_URL_PATH):
         frontend.async_remove_panel(hass, PANEL_URL_PATH)

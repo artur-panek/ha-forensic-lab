@@ -5,7 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import Any
 
-from .models import ForensicEvent
+from .models import ForensicEvent, ForensicEventKind
+
+_GENERIC_SCRIPT_SERVICES = frozenset({"turn_on", "turn_off", "toggle", "reload"})
 
 
 def retained_span_seconds(events: Iterable[ForensicEvent]) -> float:
@@ -71,4 +73,14 @@ def event_to_dict(event: ForensicEvent) -> dict[str, Any]:
 
 
 def _matches_entity(event: ForensicEvent, entity_id: str) -> bool:
-    return event.entity_id == entity_id or entity_id in event.target_entity_ids
+    if event.entity_id == entity_id or entity_id in event.target_entity_ids:
+        return True
+
+    # Direct script calls carry their entity name in the service field.
+    return (
+        event.kind is ForensicEventKind.CALL_SERVICE
+        and event.domain == "script"
+        and bool(event.service)
+        and event.service not in _GENERIC_SCRIPT_SERVICES
+        and entity_id == f"script.{event.service}"
+    )

@@ -11,7 +11,7 @@ Browse recorded state changes and service calls, follow available automation and
 [Project page](https://artur.panek.tech/work/ha-forensic-lab/) · [Engineering note](https://artur.panek.tech/notes/home-assistant-static-vs-runtime/)
 
 > [!IMPORTANT]
-> **Experimental alpha for real-instance testing.** Install the tagged [v0.1.0-alpha.1 release](https://github.com/artur-panek/ha-forensic-lab/releases/tag/v0.1.0-alpha.1) through HACS. The Home Assistant [validation checklist](docs/alpha-release-checklist.md) remains open; publishing a testing prerelease does not mean those checks have passed.
+> **Experimental alpha for real-instance testing.** Install the tagged [v0.1.0-alpha.2 release](https://github.com/artur-panek/ha-forensic-lab/releases/tag/v0.1.0-alpha.2) through HACS. The Home Assistant [validation checklist](docs/alpha-release-checklist.md) remains open; publishing a testing prerelease does not mean those checks have passed.
 
 ## Install for testing
 
@@ -23,7 +23,7 @@ catalogue. Take a Home Assistant backup before installing.
 
 1. Add `artur-panek/ha-forensic-lab` in HACS with type **Integration**, unless already added.
 2. Open HA Forensic Lab in HACS and enable **Show beta versions** in its menu.
-3. Download **v0.1.0-alpha.1** and restart Home Assistant. Existing `main` installs can use **Redownload** to select the tagged version.
+3. Download **v0.1.0-alpha.2** and restart Home Assistant. Existing `main` installs can use **Redownload** to select the tagged version.
 4. Add **HA Forensic Lab** in **Settings → Devices & services**, unless already configured.
 5. Open **HA Forensic Lab** in the sidebar.
 

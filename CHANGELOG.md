@@ -5,6 +5,21 @@ All notable changes to HA Forensic Lab are documented here.
 The project follows Semantic Versioning. Pre-release versions are expected to
 change while the public alpha is being validated.
 
+## [0.1.0-alpha.2] - 2026-10-16
+
+### Fixed
+
+- wait for saved-incident writes before unloading or replacing the integration's
+  store; reject queued and new mutations once closing starts
+- ignore stale saved-incident review results and errors after switching, closing,
+  reopening or deleting an incident; allow another selection while a review loads
+- include direct script service calls in entity-filtered timelines without
+  treating generic script services as entity names
+
+Added regression tests for incident reloads, queued mutations, delayed review
+responses and script filtering. Storage schemas and retention settings are unchanged.
+Real-instance validation remains open.
+
 ## [0.1.0-alpha.1] - 2026-10-16
 
 First experimental testing release, available through HACS with beta versions
