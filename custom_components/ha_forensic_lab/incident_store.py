@@ -27,6 +27,7 @@ class IncidentStore:
         """Initialize the incident store."""
         self._hass = hass
         self._save_lock = asyncio.Lock()
+        self._closing = False
         self._store = Store[dict[str, Any]](
             hass,
             INCIDENT_STORAGE_VERSION,
@@ -58,6 +59,12 @@ class IncidentStore:
         )[:MAX_SAVED_INCIDENTS]
         self._incidents = {incident.incident_id: incident for incident in newest}
 
+    async def async_close(self) -> None:
+        """Reject new mutations and wait for an in-flight write and read-back."""
+        self._closing = True
+        async with self._save_lock:
+            pass
+
     def get(self, incident_id: str) -> Incident | None:
         """Return one incident by ID."""
         return self._incidents.get(incident_id)
@@ -65,6 +72,8 @@ class IncidentStore:
     async def async_add(self, incident: Incident) -> None:
         """Persist a newly saved incident."""
         async with self._save_lock:
+            if self._closing:
+                raise HomeAssistantError("Incident store is closing")
             if (
                 incident.incident_id not in self._incidents
                 and len(self._incidents) >= MAX_SAVED_INCIDENTS
@@ -78,6 +87,8 @@ class IncidentStore:
     async def async_delete(self, incident_id: str) -> None:
         """Delete one saved incident."""
         async with self._save_lock:
+            if self._closing:
+                raise HomeAssistantError("Incident store is closing")
             updated = dict(self._incidents)
             del updated[incident_id]
             await self._async_save(updated)
