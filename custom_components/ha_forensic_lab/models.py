@@ -139,7 +139,8 @@ def _domain_from_entity_id(entity_id: str | None) -> str | None:
 def _state_value(value: Any) -> str | None:
     if value is None:
         return None
-    return _string_or_none(getattr(value, "state", None))
+    state = getattr(value, "state", None)
+    return state if isinstance(state, str) else None
 
 
 def _extract_entity_ids(service_data: Any) -> tuple[str, ...]:
