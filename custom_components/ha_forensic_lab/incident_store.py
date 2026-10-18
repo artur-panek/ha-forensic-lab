@@ -94,6 +94,28 @@ class IncidentStore:
             await self._async_save(updated)
 
     async def _async_save(self, updated: dict[str, Incident]) -> None:
+        # Cancelling the caller cannot stop disk work already in the executor.
+        # Keep the mutation lock until the write and read-back have both finished.
+        write = self._hass.async_create_task(
+            self._async_commit(updated), "ha_forensic_lab incident write"
+        )
+        cancellation: asyncio.CancelledError | None = None
+        while True:
+            try:
+                await asyncio.shield(write)
+                break
+            except asyncio.CancelledError as err:
+                if write.cancelled():
+                    raise
+                cancellation = err
+            except Exception as err:
+                if cancellation is not None:
+                    raise cancellation from err
+                raise
+        if cancellation is not None:
+            raise cancellation
+
+    async def _async_commit(self, updated: dict[str, Incident]) -> None:
         # Store defers writes during shutdown, so read-back would see pending data.
         if self._hass.is_stopping:
             raise HomeAssistantError("Cannot save incidents while Home Assistant stops")
