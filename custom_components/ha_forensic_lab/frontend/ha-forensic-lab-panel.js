@@ -1482,12 +1482,8 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   _formatIncidentDate(timestamp) {
-    const value = Number(timestamp);
-    if (!Number.isFinite(value)) {
-      return "Unknown date";
-    }
-
-    return new Date(value * 1000).toLocaleString();
+    const date = this._dateFromTimestamp(timestamp);
+    return date ? date.toLocaleString() : "Unknown date";
   }
 
   _explanationView() {
@@ -1979,13 +1975,21 @@ class HAForensicLabPanel extends HTMLElement {
     return labels[kind] || "Event";
   }
 
+  _dateFromTimestamp(timestamp) {
+    if ((typeof timestamp !== "number" && typeof timestamp !== "string") ||
+        (typeof timestamp === "string" && !timestamp.trim())) {
+      return null;
+    }
+    const date = new Date(Number(timestamp) * 1000);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+
   _formatTime(timestamp, precise = true) {
-    const value = Number(timestamp);
-    if (!Number.isFinite(value)) {
+    const date = this._dateFromTimestamp(timestamp);
+    if (!date) {
       return "Unknown time";
     }
 
-    const date = new Date(value * 1000);
     try {
       return date.toLocaleTimeString(undefined, {
         hour: "2-digit",
@@ -1999,12 +2003,8 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   _formatDateTime(timestamp) {
-    const value = Number(timestamp);
-    if (!Number.isFinite(value)) {
-      return "Unknown timestamp";
-    }
-
-    return new Date(value * 1000).toISOString();
+    const date = this._dateFromTimestamp(timestamp);
+    return date ? date.toISOString() : "Unknown timestamp";
   }
 
   _nullable(value) {
