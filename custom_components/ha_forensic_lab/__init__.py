@@ -105,6 +105,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     )
     store.bind_snapshot_provider(lambda: capture.events)
 
+    if not async_panel_exists(hass, PANEL_URL_PATH):
+        await panel_custom.async_register_panel(
+            hass=hass,
+            frontend_url_path=PANEL_URL_PATH,
+            webcomponent_name=PANEL_COMPONENT_NAME,
+            sidebar_title=NAME,
+            sidebar_icon="mdi:magnify",
+            module_url=f"{PANEL_STATIC_URL}/{PANEL_FILENAME}",
+            require_admin=True,
+        )
+
     if (
         len(raw_restored_events) > max_events
         or restored_events != raw_restored_events
@@ -126,17 +137,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(
         hass.bus.async_listen_once(EVENT_HOMEASSISTANT_FINAL_WRITE, flush_on_shutdown)
     )
-
-    if not async_panel_exists(hass, PANEL_URL_PATH):
-        await panel_custom.async_register_panel(
-            hass=hass,
-            frontend_url_path=PANEL_URL_PATH,
-            webcomponent_name=PANEL_COMPONENT_NAME,
-            sidebar_title=NAME,
-            sidebar_icon="mdi:magnify",
-            module_url=f"{PANEL_STATIC_URL}/{PANEL_FILENAME}",
-            require_admin=True,
-        )
 
     return True
 
