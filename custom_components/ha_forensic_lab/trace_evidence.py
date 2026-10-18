@@ -144,7 +144,7 @@ def _reference(raw: object, *, require_context: bool) -> TraceReference:
     return TraceReference(
         context_id=context_id,
         domain=domain,
-        item_id=_required_token(raw.get("item_id"), "item_id"),
+        item_id=_required_item_id(raw.get("item_id")),
         run_id=_required_token(raw.get("run_id"), "run_id"),
     )
 
@@ -167,6 +167,15 @@ def _reference_to_dict(reference: TraceReference) -> dict[str, Any]:
         "item_id": reference.item_id,
         "run_id": reference.run_id,
     }
+
+
+def _required_item_id(value: object) -> str:
+    """Automation IDs can contain spaces and Unicode; preserve their exact value."""
+    if not isinstance(value, str) or not 1 <= len(value) <= 160:
+        raise ValueError(
+            "trace_evidence.item_id must be a string of 1 to 160 characters"
+        )
+    return value
 
 
 def _required_token(value: object, field: str) -> str:
