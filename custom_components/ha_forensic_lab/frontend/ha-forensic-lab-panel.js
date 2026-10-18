@@ -38,6 +38,7 @@ class HAForensicLabPanel extends HTMLElement {
     this._incidents = [];
     this._incidentsLoaded = false;
     this._incidentsLoading = false;
+    this._incidentsRequestId = 0;
     this._incidentsError = null;
     this._incidentDraft = null;
     this._incidentPreviewRequestId = 0;
@@ -165,11 +166,12 @@ class HAForensicLabPanel extends HTMLElement {
     }
   }
 
-  async _loadIncidents() {
-    if (!this._hass || this._incidentsLoading) {
+  async _loadIncidents({ force = false } = {}) {
+    if (!this._hass || (this._incidentsLoading && !force)) {
       return;
     }
 
+    const requestId = ++this._incidentsRequestId;
     this._incidentsLoading = true;
     this._incidentsError = null;
     this._render();
@@ -178,17 +180,25 @@ class HAForensicLabPanel extends HTMLElement {
       const data = await this._hass.callWS({
         type: "ha_forensic_lab/incidents/list",
       });
+      if (requestId !== this._incidentsRequestId) {
+        return;
+      }
       this._incidents = Array.isArray(data) ? data : [];
       this._incidentsLoaded = true;
     } catch (error) {
+      if (requestId !== this._incidentsRequestId) {
+        return;
+      }
       this._incidentsError =
         error && error.message
           ? String(error.message)
           : "Unable to load saved incidents";
       this._incidentsLoaded = true;
     } finally {
-      this._incidentsLoading = false;
-      this._render();
+      if (requestId === this._incidentsRequestId) {
+        this._incidentsLoading = false;
+        this._render();
+      }
     }
   }
 
@@ -396,7 +406,7 @@ class HAForensicLabPanel extends HTMLElement {
     }
 
     if (saved) {
-      await this._loadIncidents();
+      await this._loadIncidents({ force: true });
     } else {
       this._render();
     }
@@ -526,7 +536,7 @@ class HAForensicLabPanel extends HTMLElement {
     }
 
     if (deleted) {
-      await this._loadIncidents();
+      await this._loadIncidents({ force: true });
     } else {
       this._render();
     }
