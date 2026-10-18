@@ -28,7 +28,7 @@ _SAFE_TOKEN = re.compile(r"^[A-Za-z0-9_.:-]{1,160}$")
 class TraceReference:
     """Reference to one retained Home Assistant automation/script trace."""
 
-    context_id: str
+    context_id: str | None
     domain: str
     item_id: str
     run_id: str
@@ -139,10 +139,7 @@ def _reference(raw: object, *, require_context: bool) -> TraceReference:
     if require_context:
         context_id = _required_token(context_value, "context_id")
     else:
-        context_id = (
-            _optional_token(context_value, "context_id")
-            or "child-context-unavailable"
-        )
+        context_id = _optional_token(context_value, "context_id")
 
     return TraceReference(
         context_id=context_id,
@@ -155,10 +152,7 @@ def _reference(raw: object, *, require_context: bool) -> TraceReference:
 def _step_to_dict(step: TraceStepEvidence) -> dict[str, Any]:
     result: dict[str, Any] = {"path": step.path}
     if step.child is not None:
-        child = _reference_to_dict(step.child)
-        if step.child.context_id == "child-context-unavailable":
-            child["context_id"] = None
-        result["child"] = child
+        result["child"] = _reference_to_dict(step.child)
     if step.result is not None:
         result["result"] = step.result
     if step.choice is not None:
