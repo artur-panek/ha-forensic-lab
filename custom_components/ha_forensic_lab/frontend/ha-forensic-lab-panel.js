@@ -38,6 +38,7 @@ class HAForensicLabPanel extends HTMLElement {
     this._incidents = [];
     this._incidentsLoaded = false;
     this._incidentsLoading = false;
+    this._incidentsRequestId = 0;
     this._incidentsError = null;
     this._incidentDraft = null;
     this._incidentPreviewRequestId = 0;
@@ -165,11 +166,12 @@ class HAForensicLabPanel extends HTMLElement {
     }
   }
 
-  async _loadIncidents() {
-    if (!this._hass || this._incidentsLoading) {
+  async _loadIncidents({ force = false } = {}) {
+    if (!this._hass || (this._incidentsLoading && !force)) {
       return;
     }
 
+    const requestId = ++this._incidentsRequestId;
     this._incidentsLoading = true;
     this._incidentsError = null;
     this._render();
@@ -178,17 +180,25 @@ class HAForensicLabPanel extends HTMLElement {
       const data = await this._hass.callWS({
         type: "ha_forensic_lab/incidents/list",
       });
+      if (requestId !== this._incidentsRequestId) {
+        return;
+      }
       this._incidents = Array.isArray(data) ? data : [];
       this._incidentsLoaded = true;
     } catch (error) {
+      if (requestId !== this._incidentsRequestId) {
+        return;
+      }
       this._incidentsError =
         error && error.message
           ? String(error.message)
           : "Unable to load saved incidents";
       this._incidentsLoaded = true;
     } finally {
-      this._incidentsLoading = false;
-      this._render();
+      if (requestId === this._incidentsRequestId) {
+        this._incidentsLoading = false;
+        this._render();
+      }
     }
   }
 
@@ -396,7 +406,7 @@ class HAForensicLabPanel extends HTMLElement {
     }
 
     if (saved) {
-      await this._loadIncidents();
+      await this._loadIncidents({ force: true });
     } else {
       this._render();
     }
@@ -526,7 +536,7 @@ class HAForensicLabPanel extends HTMLElement {
     }
 
     if (deleted) {
-      await this._loadIncidents();
+      await this._loadIncidents({ force: true });
     } else {
       this._render();
     }
@@ -1472,12 +1482,8 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   _formatIncidentDate(timestamp) {
-    const value = Number(timestamp);
-    if (!Number.isFinite(value)) {
-      return "Unknown date";
-    }
-
-    return new Date(value * 1000).toLocaleString();
+    const date = this._dateFromTimestamp(timestamp);
+    return date ? date.toLocaleString() : "Unknown date";
   }
 
   _explanationView() {
@@ -1969,13 +1975,21 @@ class HAForensicLabPanel extends HTMLElement {
     return labels[kind] || "Event";
   }
 
+  _dateFromTimestamp(timestamp) {
+    if ((typeof timestamp !== "number" && typeof timestamp !== "string") ||
+        (typeof timestamp === "string" && !timestamp.trim())) {
+      return null;
+    }
+    const date = new Date(Number(timestamp) * 1000);
+    return Number.isFinite(date.getTime()) ? date : null;
+  }
+
   _formatTime(timestamp, precise = true) {
-    const value = Number(timestamp);
-    if (!Number.isFinite(value)) {
+    const date = this._dateFromTimestamp(timestamp);
+    if (!date) {
       return "Unknown time";
     }
 
-    const date = new Date(value * 1000);
     try {
       return date.toLocaleTimeString(undefined, {
         hour: "2-digit",
@@ -1989,12 +2003,8 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   _formatDateTime(timestamp) {
-    const value = Number(timestamp);
-    if (!Number.isFinite(value)) {
-      return "Unknown timestamp";
-    }
-
-    return new Date(value * 1000).toISOString();
+    const date = this._dateFromTimestamp(timestamp);
+    return date ? date.toISOString() : "Unknown timestamp";
   }
 
   _nullable(value) {

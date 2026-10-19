@@ -139,7 +139,8 @@ def _domain_from_entity_id(entity_id: str | None) -> str | None:
 def _state_value(value: Any) -> str | None:
     if value is None:
         return None
-    return _string_or_none(getattr(value, "state", None))
+    state = getattr(value, "state", None)
+    return state if isinstance(state, str) else None
 
 
 def _extract_entity_ids(service_data: Any) -> tuple[str, ...]:
@@ -148,7 +149,7 @@ def _extract_entity_ids(service_data: Any) -> tuple[str, ...]:
 
     value = service_data.get("entity_id")
     if isinstance(value, str):
-        return (value,)
+        return (value,) if value else ()
 
     if isinstance(value, (list, tuple, set, frozenset)):
         return tuple(
@@ -161,7 +162,4 @@ def _extract_entity_ids(service_data: Any) -> tuple[str, ...]:
 
 
 def _string_or_none(value: Any) -> str | None:
-    if value is None:
-        return None
-    text = str(value)
-    return text if text else None
+    return value if isinstance(value, str) and value else None
