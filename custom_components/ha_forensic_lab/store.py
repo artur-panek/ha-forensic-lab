@@ -117,14 +117,29 @@ class RollingForensicStore:
             data = serialize_events(snapshot)
             started_ns = perf_counter_ns()
 
+            # Cancelling an await cannot stop an executor write. Retain the lock
+            # until it finishes so an older snapshot cannot overwrite a newer one.
+            write = self._hass.async_create_task(
+                self._store.async_save(data), "ha_forensic_lab rolling write"
+            )
+            cancellation: asyncio.CancelledError | None = None
             try:
-                await self._store.async_save(data)
-            except Exception:
+                while True:
+                    try:
+                        await asyncio.shield(write)
+                        break
+                    except asyncio.CancelledError as err:
+                        if write.cancelled():
+                            raise
+                        cancellation = err
+            except Exception as err:
                 self._metrics.record_write(
                     perf_counter_ns() - started_ns,
                     len(snapshot),
                     failed=True,
                 )
+                if cancellation is not None:
+                    raise cancellation from err
                 raise
 
             self._metrics.record_write(
@@ -136,3 +151,5 @@ class RollingForensicStore:
                 self._persisted_generation,
                 generation,
             )
+            if cancellation is not None:
+                raise cancellation
