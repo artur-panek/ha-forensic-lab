@@ -10,6 +10,10 @@ from .models import ForensicEvent, ForensicEventKind
 _GENERIC_SCRIPT_SERVICES = frozenset({"turn_on", "turn_off", "toggle", "reload"})
 
 
+class CursorExpiredError(ValueError):
+    """The requested anchor is no longer retained in the capture buffer."""
+
+
 def retained_span_seconds(events: Iterable[ForensicEvent]) -> float:
     """Return the timestamp span of the entire buffer, not a filtered page."""
     timestamps = [event.timestamp for event in events]
@@ -24,6 +28,7 @@ def query_events(
     context_id: str | None = None,
     kind: str | None = None,
     since: float | None = None,
+    before_event_id: str | None = None,
 ) -> tuple[ForensicEvent, ...]:
     """Return newest matching events first."""
     if limit < 1:
@@ -31,6 +36,18 @@ def query_events(
 
     matches: list[ForensicEvent] = []
     event_list = tuple(events)
+    if before_event_id is not None:
+        anchor = next(
+            (
+                index
+                for index, event in enumerate(event_list)
+                if event.event_id == before_event_id
+            ),
+            None,
+        )
+        if anchor is None:
+            raise CursorExpiredError("Timeline cursor expired; refresh the timeline")
+        event_list = event_list[:anchor]
 
     for event in reversed(event_list):
         if entity_id is not None and not _matches_entity(event, entity_id):

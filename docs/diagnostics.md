@@ -29,19 +29,23 @@ reports whether `capture_unchanged_states` is enabled.
 | `load_count`, `restored_events` | Loads returning normally and events decoded by the most recent load |
 | `load_average_ms`, `load_max_ms` | Load-call timing |
 | `dirty_notifications`, `scheduled_writes` | Buffer changes and scheduled save timers |
-| `completed_writes` | `Store.async_save` calls that returned without raising |
-| `failed_writes` | Exceptions raised by `Store.async_save` |
+| `completed_writes` | Save calls followed by a matching read-back |
+| `failed_writes` | Save/read exceptions or a read-back mismatch |
+| `deferred_writes` | Writes queued by HA during stopping; not verified checkpoints |
 | `flush_calls` | Explicit flush requests |
-| `write_average_ms`, `write_max_ms` | Save-call timing |
-| `last_snapshot_events` | Event count in the last snapshot whose save call returned normally |
+| `write_average_ms`, `write_max_ms` | Save plus verification timing |
+| `last_snapshot_events` | Event count in the most recent verified snapshot |
 | `pending_save` | A save timer is scheduled; this does not indicate an active filesystem write |
-| `dirty_generation`, `persisted_generation` | Buffer revision and revision last acknowledged by the Store helper |
+| `dirty_generation`, `persisted_generation` | Buffer revision and most recent verified revision |
 
-HA 2026.9.4 logs some disk/serialization failures without raising them. These
-counters therefore do **not** verify disk durability, and zero `failed_writes`
-does not prove storage is healthy. Check HA storage logs and verify evidence
-after restart during alpha testing. Saved-incident actions separately read back
-their data before acknowledging success.
+HA can log disk/serialization failures without raising them. Rolling writes now
+read back the snapshot before advancing the persisted revision. A mismatch keeps
+the revision dirty and schedules another attempt at the configured interval even
+without new events. Verification adds one bounded Store read per write; timings
+include that read. HA's stopping-phase deferrals remain unverified until a final
+write can complete. Read-back establishes the stored content, not a physical
+power-loss durability guarantee. Saved-incident actions retain their separate
+read-back check. Continue restart/restore validation during alpha testing.
 
 ## Privacy
 

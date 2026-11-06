@@ -25,6 +25,8 @@ class HAForensicLabPanel extends HTMLElement {
     this._loading = false;
     this._hasLoaded = false;
     this._error = null;
+    this._pageError = null;
+    this._nextCursor = null;
     this._requestId = 0;
     this._selectedEventId = null;
     this._explanation = null;
@@ -86,8 +88,8 @@ class HAForensicLabPanel extends HTMLElement {
     }
   }
 
-  async _loadTimeline() {
-    if (!this._hass || this._loading) {
+  async _loadTimeline(append = false) {
+    if (!this._hass || this._loading || (append && !this._nextCursor)) {
       return;
     }
 
@@ -96,6 +98,10 @@ class HAForensicLabPanel extends HTMLElement {
       type: "ha_forensic_lab/timeline",
       limit: 100,
     };
+
+    if (append) request.before_event_id = this._nextCursor;
+    else this._nextCursor = null;
+    this._pageError = null;
 
     if (this._filters.entityId) {
       request.entity_id = this._filters.entityId;
@@ -115,8 +121,11 @@ class HAForensicLabPanel extends HTMLElement {
         return;
       }
 
+      const received = Array.isArray(data.events) ? data.events : [];
+      const events = append ? [...this._data.events, ...received] : received;
+      this._nextCursor = data.next_before_event_id || null;
       this._data = {
-        events: Array.isArray(data.events) ? data.events : [],
+        events: [...new Map(events.map(event => [event.event_id, event])).values()],
         buffer_size: Number(data.buffer_size) || 0,
         buffer_capacity: Number(data.buffer_capacity) || 0,
         retained_span_seconds: data.retained_span_seconds ?? null,
@@ -128,8 +137,11 @@ class HAForensicLabPanel extends HTMLElement {
         return;
       }
 
-      this._error =
-        error && error.message ? String(error.message) : "Unable to load timeline";
+      const message = error && error.message ? String(error.message) : "Unable to load timeline";
+      if (append) {
+        this._pageError = error?.code === "cursor_expired" ? "Older events were evicted. Refresh to start from the retained timeline." : message;
+        if (error?.code === "cursor_expired") this._nextCursor = null;
+      } else this._error = message;
       this._hasLoaded = true;
     } finally {
       if (requestId === this._requestId) {
@@ -1024,7 +1036,7 @@ class HAForensicLabPanel extends HTMLElement {
   }
 
   async _applyFilters() {
-    if (this._loading) return;
+    if (this._loading) { this._requestId++; this._loading = false; }
     this._filters = { entityId: this._filterDraft.entityId.trim(), kind: this._filterDraft.kind };
     this._filterDraft = { ...this._filters };
     await this._loadTimeline();
@@ -1077,6 +1089,8 @@ class HAForensicLabPanel extends HTMLElement {
       '<div class="timeline" id="timeline-list" data-preserve-scroll>' +
       events.map((event) => this._eventView(event)).join("") +
       "</div>" +
+      (this._pageError ? '<p class="filter-status" role="status">' + this._escape(this._pageError) + '</p>' : '') +
+      (this._nextCursor ? '<button class="button" id="load-older-events" type="button"' + (this._loading ? ' disabled' : '') + '>Load older events</button>' : '') +
       "</section>"
     );
   }
@@ -1802,6 +1816,8 @@ class HAForensicLabPanel extends HTMLElement {
       button.addEventListener("click", () => this._setView(button.dataset.view));
     });
     const form = this.shadowRoot.getElementById("timeline-filters");
+    const older = this.shadowRoot.getElementById("load-older-events");
+    if (older) older.addEventListener("click", () => { void this._loadTimeline(true); });
     const refresh = this.shadowRoot.getElementById("refresh-timeline");
     const clear = this.shadowRoot.getElementById("clear-filters");
     const retry = this.shadowRoot.getElementById("retry-timeline");

@@ -20,6 +20,38 @@ globalThis.customElements = {
 
 await import("../../custom_components/ha_forensic_lab/frontend/ha-forensic-lab-panel.js");
 
+test("older pages retain loaded events and expired cursors preserve the current view", async () => {
+  const panel = new Panel();
+  const requests = [];
+  panel._hass = {async callWS(request) {
+    requests.push(request);
+    if (requests.length === 1) return {events:[{event_id:"new"}],next_before_event_id:"new"};
+    if (requests.length === 2) return {events:[{event_id:"old"}],next_before_event_id:"old"};
+    throw {code:"cursor_expired",message:"expired"};
+  }};
+  await panel._loadTimeline();
+  await panel._loadTimeline(true);
+  assert.equal(requests[1].before_event_id,"new");
+  assert.deepEqual(panel._data.events.map(event=>event.event_id),["new","old"]);
+  await panel._loadTimeline(true);
+  assert.deepEqual(panel._data.events.map(event=>event.event_id),["new","old"]);
+  assert.equal(panel._nextCursor,null);
+  assert.match(panel._pageError,/evicted/);
+  assert.equal(panel._error,null);
+});
+
+test("filter changes ignore an older page still in flight and reset the cursor",async()=>{
+  const panel=new Panel();
+  panel._data.events=[{event_id:"previous"}];panel._nextCursor="previous";
+  let release;
+  panel._hass={callWS(request){return request.before_event_id ? new Promise(resolve=>{release=resolve;}) : Promise.resolve({events:[{event_id:"filtered"}],next_before_event_id:null});}};
+  const older=panel._loadTimeline(true);
+  panel._filterDraft={entityId:"light.test",kind:""};await panel._applyFilters();
+  release({events:[{event_id:"stale"}],next_before_event_id:"stale"});await older;
+  assert.deepEqual(panel._data.events.map(event=>event.event_id),["filtered"]);
+  assert.equal(panel._nextCursor,null);
+});
+
 test("HA state updates preserve panel DOM and requests use the latest connection", async () => {
   const panel = new Panel();
   let requests = 0;
