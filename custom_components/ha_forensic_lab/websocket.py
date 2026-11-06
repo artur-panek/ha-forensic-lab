@@ -31,7 +31,12 @@ from .incidents import (
     select_incident_window,
 )
 from .models import ForensicEventKind
-from .query import event_to_dict, query_events, retained_span_seconds
+from .query import (
+    CursorExpiredError,
+    event_to_dict,
+    query_events,
+    retained_span_seconds,
+)
 from .store import RollingForensicStore
 from .trace_evidence import normalize_trace_evidence, trace_evidence_to_dict
 
@@ -75,6 +80,7 @@ def async_register_websocket_api(hass: HomeAssistant) -> None:
         ),
         vol.Optional("entity_id"): str,
         vol.Optional("context_id"): str,
+        vol.Optional("before_event_id"): vol.All(str, vol.Length(min=1)),
         vol.Optional("kind"): vol.In(_EVENT_KINDS),
         vol.Optional("since"): vol.All(
             vol.Coerce(float), vol.Range(min=0)
@@ -93,14 +99,20 @@ def websocket_timeline(
         return
 
     snapshot = capture.events
-    events = query_events(
-        snapshot,
-        limit=msg["limit"],
-        entity_id=msg.get("entity_id"),
-        context_id=msg.get("context_id"),
-        kind=msg.get("kind"),
-        since=msg.get("since"),
-    )
+    try:
+        page = query_events(
+            snapshot,
+            limit=msg["limit"] + 1,
+            entity_id=msg.get("entity_id"),
+            context_id=msg.get("context_id"),
+            kind=msg.get("kind"),
+            since=msg.get("since"),
+            before_event_id=msg.get("before_event_id"),
+        )
+    except CursorExpiredError as err:
+        connection.send_error(msg["id"], "cursor_expired", str(err))
+        return
+    events = page[:msg["limit"]]
 
     connection.send_result(
         msg["id"],
@@ -109,6 +121,9 @@ def websocket_timeline(
             "buffer_size": len(snapshot),
             "buffer_capacity": capture.max_events,
             "retained_span_seconds": retained_span_seconds(snapshot),
+            "next_before_event_id": (
+                events[-1].event_id if len(page) > len(events) else None
+            ),
         },
     )
 

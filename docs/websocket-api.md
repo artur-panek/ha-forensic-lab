@@ -21,6 +21,14 @@ Optional filters:
 | since | number | Minimum Home Assistant event timestamp |
 
 Results are newest-first and include normalized events plus current rolling buffer size/capacity.
+
+`before_event_id` optionally anchors an older page to an event in the retained
+buffer. Ordering follows capture order, including equal or adjusted timestamps.
+The result includes `next_before_event_id` when more matching events remain.
+Reuse the same filters with that cursor; an evicted anchor returns
+`cursor_expired` and requires a fresh first page. Paging does not extend retention
+or recover evicted events. The panel's **Load older events** appends pages and
+keeps the existing selection available for inspect, explain and incident capture.
 `retained_span_seconds` reports the timestamp span of the entire rolling buffer,
 before query filters or the response limit. Empty and single-event buffers report
 zero. This duration is also available in aggregate diagnostics.

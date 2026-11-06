@@ -89,6 +89,7 @@ class PersistenceMetrics:
     scheduled_writes: int = 0
     completed_writes: int = 0
     failed_writes: int = 0
+    deferred_writes: int = 0
     flush_calls: int = 0
     write_total_ns: int = 0
     write_max_ns: int = 0
@@ -107,12 +108,16 @@ class PersistenceMetrics:
         event_count: int,
         *,
         failed: bool,
+        deferred: bool = False,
     ) -> None:
         """Record one attempted rolling snapshot write."""
         self.write_total_ns += duration_ns
         self.write_max_ns = max(self.write_max_ns, duration_ns)
         if failed:
             self.failed_writes += 1
+            return
+        if deferred:
+            self.deferred_writes += 1
             return
         self.completed_writes += 1
         self.last_snapshot_events = event_count
@@ -126,7 +131,9 @@ class PersistenceMetrics:
     ) -> dict[str, int | float | bool]:
         """Return a JSON-safe aggregate snapshot."""
         load_average_ns = self.load_total_ns / self.load_count if self.load_count else 0
-        write_attempts = self.completed_writes + self.failed_writes
+        write_attempts = (
+            self.completed_writes + self.failed_writes + self.deferred_writes
+        )
         write_average_ns = self.write_total_ns / write_attempts if write_attempts else 0
 
         return {
@@ -138,6 +145,7 @@ class PersistenceMetrics:
             "scheduled_writes": self.scheduled_writes,
             "completed_writes": self.completed_writes,
             "failed_writes": self.failed_writes,
+            "deferred_writes": self.deferred_writes,
             "flush_calls": self.flush_calls,
             "write_average_ms": round(write_average_ns / 1_000_000, 6),
             "write_max_ms": round(self.write_max_ns / 1_000_000, 6),

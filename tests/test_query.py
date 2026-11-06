@@ -8,6 +8,36 @@ models = load_module("models")
 query = load_module("query")
 
 
+def test_cursor_pages_by_retained_order_even_with_duplicate_or_reversed_timestamps():
+    events = tuple(_event(index, timestamp=5 - index) for index in range(6))
+    first = query.query_events(events, limit=2)
+    second = query.query_events(events, limit=2, before_event_id=first[-1].event_id)
+    third = query.query_events(events, limit=2, before_event_id=second[-1].event_id)
+    assert [event.event_id for event in (*first, *second, *third)] == [
+        "event-5",
+        "event-4",
+        "event-3",
+        "event-2",
+        "event-1",
+        "event-0",
+    ]
+
+
+def test_cursor_expiration_is_explicit_and_filters_apply_beyond_anchor():
+    import pytest
+
+    events = tuple(
+        _event(index, entity_id="light.test" if index % 2 else "sensor.other")
+        for index in range(8)
+    )
+    result = query.query_events(
+        events, limit=2, entity_id="light.test", before_event_id="event-6"
+    )
+    assert [event.event_id for event in result] == ["event-5", "event-3"]
+    with pytest.raises(query.CursorExpiredError):
+        query.query_events(events[4:], before_event_id="event-3")
+
+
 def _event(
     sequence: int,
     *,

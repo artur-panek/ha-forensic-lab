@@ -8,7 +8,8 @@ from datetime import datetime
 from time import perf_counter_ns
 from typing import Any
 
-from homeassistant.core import CALLBACK_TYPE, HomeAssistant, callback
+from homeassistant.core import CALLBACK_TYPE, CoreState, HomeAssistant, callback
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 
@@ -80,7 +81,11 @@ class RollingForensicStore:
         """Mark the snapshot dirty and schedule a bounded-delay write."""
         self._metrics.dirty_notifications += 1
         self._generation += 1
-        if self._cancel_scheduled_save is not None:
+        self._schedule_pending_write()
+
+    @callback
+    def _schedule_pending_write(self) -> None:
+        if self._cancel_scheduled_save is not None or self._hass.is_stopping:
             return
 
         self._metrics.scheduled_writes += 1
@@ -97,11 +102,19 @@ class RollingForensicStore:
             self._cancel_scheduled_save()
             self._cancel_scheduled_save = None
 
-        await self._async_write_snapshot()
+        try:
+            await self._async_write_snapshot()
+        except Exception:
+            self._schedule_pending_write()
+            raise
 
     async def _async_scheduled_save(self, _now: datetime) -> None:
         self._cancel_scheduled_save = None
-        await self._async_write_snapshot()
+        try:
+            await self._async_write_snapshot()
+        except Exception:
+            self._schedule_pending_write()
+            raise
 
     async def _async_write_snapshot(self) -> None:
         async with self._save_lock:
@@ -120,13 +133,13 @@ class RollingForensicStore:
             # Cancelling an await cannot stop an executor write. Retain the lock
             # until it finishes so an older snapshot cannot overwrite a newer one.
             write = self._hass.async_create_task(
-                self._store.async_save(data), "ha_forensic_lab rolling write"
+                self._async_save_verified(data), "ha_forensic_lab rolling write"
             )
             cancellation: asyncio.CancelledError | None = None
             try:
                 while True:
                     try:
-                        await asyncio.shield(write)
+                        verified = await asyncio.shield(write)
                         break
                     except asyncio.CancelledError as err:
                         if write.cancelled():
@@ -146,10 +159,25 @@ class RollingForensicStore:
                 perf_counter_ns() - started_ns,
                 len(snapshot),
                 failed=False,
+                deferred=not verified,
             )
-            self._persisted_generation = max(
-                self._persisted_generation,
-                generation,
-            )
+            if verified:
+                self._persisted_generation = max(
+                    self._persisted_generation,
+                    generation,
+                )
             if cancellation is not None:
                 raise cancellation
+
+    async def _async_save_verified(self, data: dict[str, Any]) -> bool:
+        deferred = self._hass.state is CoreState.stopping
+        await self._store.async_save(data)
+        if deferred:
+            # HA queues this write for FINAL_WRITE; pending data is not proof of
+            # disk persistence. The final flush can verify once writes resume.
+            return False
+        if await self._store.async_load() != data:
+            raise HomeAssistantError(
+                "Rolling snapshot was not saved; check Home Assistant storage logs"
+            )
+        return True

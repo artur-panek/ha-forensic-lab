@@ -5,6 +5,18 @@ All notable changes to HA Forensic Lab are documented here.
 The project follows Semantic Versioning. Pre-release versions are expected to
 change while the public alpha is being validated.
 
+## [0.1.0-alpha.3] - release preparation
+
+### Added
+
+- traverse retained timeline history with anchored older-page cursors and explicit cursor-expiration handling.
+
+### Fixed
+
+- verify rolling Store writes by read-back, keep failed generations dirty and retry without requiring another capture event.
+- distinguish stopping-phase deferred writes from verified checkpoints.
+- refresh the advisory compatibility target to Home Assistant 2026.11.0; minimum support remains 2026.9.4.
+
 ## [0.1.0-alpha.2] - 2026-10-16
 
 ### Fixed
