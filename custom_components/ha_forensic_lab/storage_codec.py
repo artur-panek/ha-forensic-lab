@@ -6,7 +6,7 @@ from collections.abc import Iterable, Mapping
 from math import isfinite
 from typing import Any
 
-from .models import ForensicEvent, ForensicEventKind
+from .models import ForensicEvent, ForensicEventKind, normalize_entity_targets
 from .query import event_to_dict
 
 
@@ -64,7 +64,7 @@ def _event_from_dict(raw: object) -> ForensicEvent:
         service=_optional_string(raw.get("service")),
         name=_optional_string(raw.get("name")),
         source=_optional_string(raw.get("source")),
-        target_entity_ids=tuple(target_entity_ids),
+        target_entity_ids=normalize_entity_targets(target_entity_ids),
         old_state=_optional_string(raw.get("old_state")),
         new_state=_optional_string(raw.get("new_state")),
     )

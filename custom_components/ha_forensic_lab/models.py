@@ -100,7 +100,11 @@ def normalize_event(
 
     if kind is ForensicEventKind.CALL_SERVICE:
         service_data = event.data.get("service_data")
-        target_entity_ids = _extract_entity_ids(service_data)
+        target_entity_ids = normalize_entity_targets(
+            service_data.get("entity_id")
+            if isinstance(service_data, Mapping)
+            else None
+        )
         return ForensicEvent(
             **common,
             domain=_string_or_none(event.data.get("domain")),
@@ -143,19 +147,18 @@ def _state_value(value: Any) -> str | None:
     return state if isinstance(state, str) else None
 
 
-def _extract_entity_ids(service_data: Any) -> tuple[str, ...]:
-    if not isinstance(service_data, Mapping):
-        return ()
-
-    value = service_data.get("entity_id")
+def normalize_entity_targets(value: Any) -> tuple[str, ...]:
+    """Normalize raw service targets, including older stored scalar targets."""
     if isinstance(value, str):
-        return (value,) if value else ()
+        value = (value,)
 
     if isinstance(value, (list, tuple, set, frozenset)):
         return tuple(
             entity_id
             for item in value
-            if (entity_id := _string_or_none(item)) is not None
+            if isinstance(item, str)
+            for target in item.split(",")
+            if (entity_id := target.strip().lower())
         )
 
     return ()
