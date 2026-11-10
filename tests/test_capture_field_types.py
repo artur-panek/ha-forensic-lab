@@ -80,6 +80,23 @@ def test_empty_scalar_target_is_absent():
     assert normalized.target_entity_ids == ()
 
 
+@pytest.mark.parametrize(
+    "targets,expected",
+    [
+        ("light.hall, LIGHT.PRIVATE", ("light.hall", "light.private")),
+        (" light.hall ", ("light.hall",)),
+        (["LIGHT.HALL", "light.private"], ("light.hall", "light.private")),
+        (" , ", ()),
+    ],
+)
+def test_service_targets_use_individual_normalized_entity_ids(targets, expected):
+    event = _event("call_service", {"service_data": {"entity_id": targets}})
+
+    normalized = models.normalize_event(event, 1, "session")
+
+    assert normalized.target_entity_ids == expected
+
+
 def test_state_strings_are_preserved_without_converting_objects():
     event = _event("state_changed", {
         "entity_id": "sensor.test",

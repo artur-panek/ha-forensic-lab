@@ -8,6 +8,8 @@ from tests.support import load_module
 
 models = load_module("models")
 codec = load_module("storage_codec")
+policy = load_module("capture_policy")
+query = load_module("query")
 
 
 def _event(event_id: str):
@@ -32,6 +34,33 @@ def test_storage_round_trip_preserves_normalized_event() -> None:
     restored = codec.deserialize_events(stored)
 
     assert restored == original
+
+
+@pytest.mark.parametrize("exclude_all", [False, True])
+def test_legacy_combined_targets_respect_policy_after_restore(exclude_all):
+    stored = {
+        "events": [{
+            "event_id": "legacy-call",
+            "kind": "call_service",
+            "timestamp": 123.5,
+            "domain": "light",
+            "service": "turn_on",
+            "target_entity_ids": [" light.hall, LIGHT.PRIVATE "],
+        }],
+    }
+    excluded = {"light.private"}
+    if exclude_all:
+        excluded.add("light.hall")
+    capture_policy = policy.CapturePolicy(excluded_entities=frozenset(excluded))
+
+    restored = capture_policy.filter_snapshot(codec.deserialize_events(stored))
+
+    if exclude_all:
+        assert restored == ()
+    else:
+        assert restored[0].target_entity_ids == ("light.hall",)
+        assert query.query_events(restored, entity_id="light.hall") == restored
+        assert query.query_events(restored, entity_id="light.private") == ()
 
 
 def test_deserializer_skips_malformed_entries() -> None:
